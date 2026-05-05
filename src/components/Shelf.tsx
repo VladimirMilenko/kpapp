@@ -1,7 +1,7 @@
 import type { Section } from "../appTypes";
-import { escapeCssUrl, railPosterOf, titleOf, watchProgressPercentOf } from "../media";
+import { railPosterCandidatesOf, titleOf, watchProgressPercentOf } from "../media";
 import type { KinoItem } from "../types";
-import { cssVars } from "../ui";
+import { PosterImage } from "./PosterImage";
 
 export interface ShelfFocusContext {
   items: KinoItem[];
@@ -34,7 +34,7 @@ export function Shelf({
       </div>
       <div className="rail">
         {items.map((item, index) => {
-          const poster = railPosterOf(item);
+          const posterUrls = railPosterCandidatesOf(item);
           const progress = isContinue ? watchProgressPercentOf(item) : 0;
           return (
             <button
@@ -42,10 +42,10 @@ export function Shelf({
               className={`poster-card${isContinue ? " is-continue-card" : ""}`}
               type="button"
               data-focusable
-              style={poster ? cssVars({ "--poster": `url("${escapeCssUrl(poster)}")` }) : undefined}
               onFocus={() => onFocusItem?.(item, { items, index, mode })}
               onClick={() => (isContinue && onContinue ? onContinue(item) : onOpen(item.id))}
             >
+              <PosterImage urls={posterUrls} className="poster-image" alt="" />
               <span className="poster-gradient" />
               <span className="poster-title">{titleOf(item)}</span>
               {isContinue && progress > 0 && (

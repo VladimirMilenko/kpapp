@@ -1,8 +1,8 @@
+import { PosterImage } from "../components/PosterImage";
 import { TopBar } from "../components/TopBar";
 import { useAutoFocus } from "../hooks/useAutoFocus";
-import { cardPosterOf, escapeCssUrl, historyTimeLabel, mediaFromHistoryEntry, metaLine, titleOf, watchingMetaOf } from "../media";
+import { cardPosterCandidatesOf, historyTimeLabel, mediaFromHistoryEntry, metaLine, titleOf, watchingMetaOf } from "../media";
 import type { KinoHistoryEntry } from "../types";
-import { cssVars } from "../ui";
 
 export function HistoryScreen({
   entries,
@@ -71,7 +71,7 @@ export function HistoryScreen({
             {visibleEntries.map((entry, index) => {
               const item = entry.item;
               const media = mediaFromHistoryEntry(entry);
-              const poster = item ? cardPosterOf(item) : "";
+              const posterUrls = item ? cardPosterCandidatesOf(item) : [];
 
               return (
                 <article key={String(item?.id ?? `${historyTimeLabel(entry)}-${index}`)} className="history-card">
@@ -80,10 +80,9 @@ export function HistoryScreen({
                     type="button"
                     data-focusable
                     data-autofocus={index === 0 || undefined}
-                    style={poster ? cssVars({ "--poster": `url("${escapeCssUrl(poster)}")` }) : undefined}
                     onClick={() => onResume(entry)}
                   >
-                    <span className="history-card-poster" />
+                    <PosterImage urls={posterUrls} className="history-card-poster" alt="" />
                     <span className="history-card-copy">
                       <span className="history-card-title">{titleOf(item ?? {})}</span>
                       <span className="history-card-meta">{media ? watchingMetaOf(item ?? {}) : metaLine(item ?? {})}</span>

@@ -216,6 +216,42 @@ export class KinoApi {
     await this.get("/v1/watching/marktime", query);
   }
 
+  async markWatched(params: {
+    itemId: string | number | undefined;
+    seasonNumber: number | undefined;
+    videoNumber: number | undefined;
+  }) {
+    const watched = await this.toggleWatched(params);
+
+    if (watched === 0) {
+      return this.toggleWatched(params);
+    }
+
+    return watched;
+  }
+
+  private async toggleWatched(params: {
+    itemId: string | number | undefined;
+    seasonNumber: number | undefined;
+    videoNumber: number | undefined;
+  }) {
+    if (params.itemId === undefined) {
+      return undefined;
+    }
+
+    const query: Record<string, string | number> = {
+      id: params.itemId,
+      video: params.videoNumber ?? 1
+    };
+
+    if (params.seasonNumber !== undefined) {
+      query.season = params.seasonNumber;
+    }
+
+    const data = await this.get<unknown>("/v1/watching/toggle", query);
+    return extractWatchedValue(data);
+  }
+
   private async optionalListItems(path: string, params: Record<string, string | number> = {}, page = 0, perpage = 24) {
     try {
       return await this.listItems(path, params, page, perpage);
@@ -725,4 +761,15 @@ function primitiveId(value: unknown): string | number | undefined {
   }
 
   return undefined;
+}
+
+function extractWatchedValue(data: unknown): 0 | 1 | undefined {
+  if (!data || typeof data !== "object") {
+    return undefined;
+  }
+
+  const candidate = data as Record<string, unknown>;
+  const value = Number(candidate.watched);
+
+  return value === 0 || value === 1 ? value : undefined;
 }

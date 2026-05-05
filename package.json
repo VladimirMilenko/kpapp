@@ -8,14 +8,17 @@
     "build": "bunx --bun vite build && bun run scripts/webos.ts",
     "preview": "bunx --bun vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "package:webos": "bun run build && ares-package -n -o dist dist",
     "install:webos": "ares-install --device tv dist/com.kino-pub.lgtv_0.1.0_all.ipk",
     "launch:webos": "ares-launch --device tv com.kino-pub.lgtv",
     "launch:simulator": "bun run build && ares-launch -s ${WEBOS_SIMULATOR_VERSION:-26} -sp ${WEBOS_SIMULATOR_PATH:-$HOME/Downloads/webOS_TV_26_Simulator_1.5.0} dist"
   },
   "dependencies": {
+    "@fontsource/noto-sans": "^5.2.10",
     "@tanstack/react-query": "^5.0.0",
     "hls.js": "^1.6.13",
+    "lucide-react": "^1.14.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-router": "^7.0.0"

@@ -6,7 +6,24 @@ import type { PlayerRouteState, Section } from "./appTypes";
 import { focusFirst } from "./dom";
 import { useGlobalNavigation } from "./hooks/useGlobalNavigation";
 import { AuthRequiredError, KinoApi } from "./kinoApi";
-import { backdropOf, flatMediaOf, mediaDomId, mediaFromHistoryEntry, mediaRowsOf, nextMediaAfterSession, playbackSessionOf, posterOf, railPosterOf, resumeMediaOf } from "./media";
+import {
+  backdropOf,
+  episodeNumber,
+  flatMediaOf,
+  mediaDomId,
+  mediaFromHistoryEntry,
+  mediaMatchesSession,
+  mediaProgressOf,
+  mediaRowsOf,
+  mediaSubtitle,
+  mediaTitle,
+  nextMediaAfterSession,
+  playbackSessionOf,
+  posterOf,
+  previousMediaBeforeSession,
+  railPosterOf,
+  resumeMediaOf
+} from "./media";
 import { kinoQueryKeys, QUERY_STALE_TIME } from "./queryClient";
 import type { ShelfFocusContext } from "./components/Shelf";
 import { BrowseScreen } from "./screens/BrowseScreen";
@@ -28,6 +45,7 @@ import type {
   KinoItem,
   KinoMedia,
   KinoRuntimeConfig,
+  PlayerEpisodeCard,
   PlaybackProgress,
   PlaybackSession
 } from "./types";
@@ -585,6 +603,7 @@ function PlayerRoute() {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as PlayerRouteState | null;
+  const watchedMarkPromisesRef = useRef(new Map<string, Promise<void>>());
   const mutation = useMutation({
     mutationFn: ({ session, progress }: { session: PlaybackSession; progress: PlaybackProgress }) =>
       api.markWatching({
@@ -612,6 +631,10 @@ function PlayerRoute() {
       localStorage.setItem(session.progressKey, String(Math.floor(progress.currentTime)));
     }
 
+    if (progress.completed) {
+      void markSessionWatched(session);
+    }
+
     if (progress.currentTime < 10 && !progress.completed) {
       return;
     }
@@ -622,11 +645,114 @@ function PlayerRoute() {
   return (
     <PlayerScreen
       session={state.session}
+      episodes={playerEpisodeCardsOf(playerState.item, playerState.session)}
+      previousEpisode={playerAdjacentEpisodeCardOf(playerState.item, playerState.session, -1)}
+      nextEpisode={playerAdjacentEpisodeCardOf(playerState.item, playerState.session, 1)}
       onClose={() => navigate(-1)}
       onProgress={savePlaybackProgress}
-      onEnded={() => void playNextAfterPlayer(playerState, api, config, queryClient, navigate)}
+      onEnded={handlePlaybackEnded}
+      onSelectEpisode={(media, options) =>
+        void playItemMedia(
+          playerState.item,
+          media,
+          api,
+          config,
+          queryClient,
+          navigate,
+          options?.restart ? { replace: true, resumeTime: 0 } : { replace: true }
+        )
+      }
     />
   );
+
+  function handlePlaybackEnded() {
+    void markSessionWatched(playerState.session);
+    void playNextAfterPlayer(playerState, api, config, queryClient, navigate);
+  }
+
+  function markSessionWatched(session: PlaybackSession) {
+    if (session.watched === true || session.itemId === undefined) {
+      return Promise.resolve();
+    }
+
+    const key = watchedKeyOf(session);
+    const existing = watchedMarkPromisesRef.current.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const promise = api
+      .markWatched({
+        itemId: session.itemId,
+        seasonNumber: session.seasonNumber,
+        videoNumber: session.videoNumber
+      })
+      .then((watched) => {
+        if (watched === 1) {
+          session.watched = true;
+        }
+
+        void queryClient.invalidateQueries({ queryKey: kinoQueryKeys.home() });
+        void queryClient.invalidateQueries({ queryKey: kinoQueryKeys.history() });
+        if (session.itemId !== undefined) {
+          void queryClient.invalidateQueries({ queryKey: kinoQueryKeys.item(session.itemId) });
+        }
+      })
+      .catch((error) => {
+        console.warn("Unable to mark Kino.pub item as watched", error);
+      })
+      .finally(() => {
+        watchedMarkPromisesRef.current.delete(key);
+      });
+
+    watchedMarkPromisesRef.current.set(key, promise);
+    return promise;
+  }
+}
+
+function watchedKeyOf(session: PlaybackSession) {
+  return [session.itemId ?? "", session.seasonNumber ?? "", session.videoNumber ?? 1].join(":");
+}
+
+function playerEpisodeCardsOf(item: KinoItem, session: PlaybackSession): PlayerEpisodeCard[] {
+  const media = flatMediaOf(item);
+  if (media.length <= 1) {
+    return [];
+  }
+
+  const currentIndex = media.findIndex((candidate) => mediaMatchesSession(candidate, session));
+  const current = currentIndex >= 0 ? currentIndex : 0;
+  const start = Math.max(0, Math.min(current - 2, media.length - 6));
+
+  return media.slice(start, start + 6).map((candidate, index) => {
+    return playerEpisodeCardOf(item, candidate, start + index, start + index === currentIndex);
+  });
+}
+
+function playerAdjacentEpisodeCardOf(item: KinoItem, session: PlaybackSession, direction: -1 | 1) {
+  const candidate = direction < 0 ? previousMediaBeforeSession(item, session) : nextMediaAfterSession(item, session);
+
+  if (!candidate) {
+    return undefined;
+  }
+
+  return playerEpisodeCardOf(item, candidate, 0, false);
+}
+
+function playerEpisodeCardOf(item: KinoItem, candidate: KinoMedia, index: number, active: boolean): PlayerEpisodeCard {
+  const progress = mediaProgressOf(item, candidate);
+  const subtitle = mediaSubtitle(candidate);
+
+  return {
+    id: mediaDomId(candidate) || `${index}`,
+    media: candidate,
+    title: mediaTitle(candidate),
+    meta: active ? "Now playing" : subtitle || episodeNumber(candidate),
+    progressLabel: progress.label,
+    progressPercent: progress.percent,
+    active,
+    watched: progress.completed
+  };
 }
 
 function AuthRoute() {
@@ -804,7 +930,7 @@ async function playItemMedia(
   config: KinoRuntimeConfig,
   queryClient: ReturnType<typeof useQueryClient>,
   navigate: ReturnType<typeof useNavigate>,
-  replace = false
+  options: { replace?: boolean; resumeTime?: number } = {}
 ) {
   const hydrated = await queryClient.fetchQuery({
     queryKey: kinoQueryKeys.playableMedia(media, config.preferredStream),
@@ -813,7 +939,11 @@ async function playItemMedia(
     gcTime: 5 * 60_000
   });
   const session = playbackSessionOf(item, hydrated, config);
-  navigate("/player", { replace, state: { item, session } satisfies PlayerRouteState });
+  if (options.resumeTime !== undefined) {
+    session.resumeTime = options.resumeTime;
+  }
+
+  navigate("/player", { replace: options.replace ?? false, state: { item, session } satisfies PlayerRouteState });
 }
 
 async function playHistoryEntry(
@@ -853,7 +983,7 @@ async function playNextAfterPlayer(
     return;
   }
 
-  await playItemMedia(state.item, next, api, config, queryClient, navigate, true);
+  await playItemMedia(state.item, next, api, config, queryClient, navigate, { replace: true });
 }
 
 function matchingMedia(item: KinoItem, media: KinoMedia) {

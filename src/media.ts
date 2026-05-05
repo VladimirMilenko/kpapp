@@ -55,6 +55,7 @@ export function playbackSessionOf(item: KinoItem, media: KinoMedia, config: Kino
   const itemId = item.id;
   const seasonNumber = numberValue(media.season);
   const videoNumber = numberValue(media.number) ?? 1;
+  const watchStatus = watchStatusOf(media);
 
   if (subtitle) {
     session.subtitle = subtitle;
@@ -74,6 +75,10 @@ export function playbackSessionOf(item: KinoItem, media: KinoMedia, config: Kino
 
   if (videoNumber !== undefined) {
     session.videoNumber = videoNumber;
+  }
+
+  if (watchStatus !== undefined) {
+    session.watched = watchStatus === 1;
   }
 
   return session;
@@ -117,10 +122,21 @@ export function nextMediaAfterSession(item: KinoItem, session: PlaybackSession) 
   const currentIndex = media.findIndex((candidate) => mediaMatchesSession(candidate, session));
 
   if (currentIndex < 0) {
-    return undefined;
+    return nextMediaByEpisodeNumber(media, session);
   }
 
   return media[currentIndex + 1];
+}
+
+export function previousMediaBeforeSession(item: KinoItem, session: PlaybackSession) {
+  const media = flatMediaOf(item);
+  const currentIndex = media.findIndex((candidate) => mediaMatchesSession(candidate, session));
+
+  if (currentIndex < 0) {
+    return previousMediaByEpisodeNumber(media, session);
+  }
+
+  return media[currentIndex - 1];
 }
 
 export function mediaFromHistoryEntry(entry: KinoHistoryEntry) {
@@ -190,16 +206,29 @@ export function sourcesOf(media: KinoMedia, preferred: PreferredStream): MediaSo
       const height = numberValue(file.height ?? file.h);
       const width = numberValue(file.width ?? file.w);
       const quality = String(file.quality || file.quality_id || (height ? `${height}p` : ""));
-
-      return {
+      const source: MediaSourceOption = {
         id: String(file.id ?? file.file ?? file.quality ?? index),
         label: quality || file.codec || `Source ${index + 1}`,
-        url,
-        quality: quality || undefined,
-        width,
-        height,
-        codec: typeof file.codec === "string" ? file.codec : undefined
+        url
       };
+
+      if (quality) {
+        source.quality = quality;
+      }
+
+      if (width !== undefined) {
+        source.width = width;
+      }
+
+      if (height !== undefined) {
+        source.height = height;
+      }
+
+      if (typeof file.codec === "string") {
+        source.codec = file.codec;
+      }
+
+      return source;
     })
     .filter(Boolean)
     .sort((a, b) => (b?.height ?? 0) - (a?.height ?? 0)) as MediaSourceOption[];
@@ -213,12 +242,16 @@ export function hasPlayableSources(media: KinoMedia) {
 }
 
 export function sourceUrl(file: KinoFile, order: PreferredStream[]) {
-  const urls = typeof file.url === "object" && file.url ? file.url : file.urls;
+  const urlSets = [typeof file.url === "object" && file.url ? file.url : undefined, file.urls].filter(
+    Boolean
+  ) as Array<Partial<Record<PreferredStream | string, string>>>;
 
   for (const key of order) {
-    const url = urls?.[key];
-    if (url) {
-      return url;
+    for (const urls of urlSets) {
+      const url = urls[key];
+      if (url) {
+        return url;
+      }
     }
   }
 
@@ -226,7 +259,14 @@ export function sourceUrl(file: KinoFile, order: PreferredStream[]) {
     return file.url;
   }
 
-  return Object.values(urls ?? {}).find(Boolean);
+  for (const urls of urlSets) {
+    const fallback = Object.values(urls).find((value): value is string => Boolean(value));
+    if (fallback) {
+      return fallback;
+    }
+  }
+
+  return undefined;
 }
 
 export function streamPreference(preferred: PreferredStream): PreferredStream[] {
@@ -351,19 +391,19 @@ export function synopsisOf(item: KinoItem) {
 }
 
 export function posterOf(item: KinoItem) {
-  return item.posters?.big || item.posters?.medium || item.posters?.small || item.posters?.poster || item.images?.poster || item.poster || "";
+  return posterCandidatesOf(item)[0] ?? "";
 }
 
 export function cardPosterOf(item: KinoItem) {
-  return item.posters?.medium || item.posters?.small || item.posters?.poster || item.posters?.big || item.images?.poster || item.poster || "";
+  return cardPosterCandidatesOf(item)[0] ?? "";
 }
 
 export function railPosterOf(item: KinoItem) {
-  return item.posters?.big || item.posters?.medium || item.posters?.small || item.posters?.poster || item.images?.poster || item.poster || "";
+  return railPosterCandidatesOf(item)[0] ?? "";
 }
 
 export function backdropOf(item: KinoItem) {
-  return item.posters?.wide || item.images?.wide || item.images?.full || item.fanart || "";
+  return backdropCandidatesOf(item)[0] ?? "";
 }
 
 export function heroImageOf(item: KinoItem) {
@@ -374,6 +414,29 @@ export function heroImageOf(item: KinoItem) {
 
   const fallback = posterOf(item);
   return fallback ? { url: fallback, mode: "poster" as const } : undefined;
+}
+
+export function posterCandidatesOf(item: KinoItem) {
+  return imageCandidates(item.posters?.big, item.posters?.medium, item.posters?.small, item.posters?.poster, item.images?.poster, item.poster);
+}
+
+export function cardPosterCandidatesOf(item: KinoItem) {
+  return imageCandidates(item.posters?.medium, item.posters?.small, item.posters?.poster, item.posters?.big, item.images?.poster, item.poster);
+}
+
+export function railPosterCandidatesOf(item: KinoItem) {
+  return imageCandidates(item.posters?.big, item.posters?.medium, item.posters?.small, item.posters?.poster, item.images?.poster, item.poster);
+}
+
+export function backdropCandidatesOf(item: KinoItem) {
+  return imageCandidates(item.posters?.wide, item.images?.wide, item.images?.full, item.fanart);
+}
+
+export function heroImageCandidatesOf(item: KinoItem) {
+  return [
+    ...backdropCandidatesOf(item).map((url) => ({ url, mode: "wide" as const })),
+    ...posterCandidatesOf(item).map((url) => ({ url, mode: "poster" as const }))
+  ];
 }
 
 export function mediaIdOf(media: KinoMedia) {
@@ -499,8 +562,21 @@ function booleanValue(value: unknown) {
   return undefined;
 }
 
-export function escapeCssUrl(value: string) {
-  return value.replace(/["\\]/g, "\\$&");
+function imageCandidates(...urls: Array<string | undefined>) {
+  const seen = new Set<string>();
+  const values: string[] = [];
+
+  for (const value of urls) {
+    const url = value?.trim();
+    if (!url || seen.has(url)) {
+      continue;
+    }
+
+    seen.add(url);
+    values.push(url);
+  }
+
+  return values;
 }
 
 function seasonMedia(season: KinoSeason) {
@@ -614,7 +690,7 @@ function trackLabel(audio: { title?: string; name?: string; lang?: string; langu
 
 function subtitleLabel(subtitle: { title?: string; name?: string; lang?: string; language?: string; forced?: unknown }, fallback: string) {
   const lang = subtitle.lang || subtitle.language;
-  const forced = subtitle.forced ? "Forced" : "";
+  const forced = booleanValue(subtitle.forced) ? "Forced" : "";
   const parts = [subtitle.title || subtitle.name || lang?.toUpperCase(), forced].filter(Boolean);
 
   return parts.length ? parts.join(" ") : fallback;
@@ -629,7 +705,7 @@ function titleFromNested(value: unknown) {
   return typeof item.title === "string" ? item.title : typeof item.short_title === "string" ? item.short_title : "";
 }
 
-function mediaMatchesSession(media: KinoMedia, session: PlaybackSession) {
+export function mediaMatchesSession(media: KinoMedia, session: PlaybackSession) {
   const id = String(mediaIdOf(media) ?? "");
 
   if (id && id === session.id) {
@@ -644,6 +720,73 @@ function mediaMatchesSession(media: KinoMedia, session: PlaybackSession) {
     videoNumber === session.videoNumber &&
     (session.seasonNumber === undefined || seasonNumber === session.seasonNumber)
   );
+}
+
+function nextMediaByEpisodeNumber(media: KinoMedia[], session: PlaybackSession) {
+  const sessionVideoNumber = numberValue(session.videoNumber);
+  if (sessionVideoNumber === undefined) {
+    return undefined;
+  }
+
+  const sessionSeasonNumber = numberValue(session.seasonNumber);
+  return media.find((candidate) => {
+    const videoNumber = numberValue(candidate.number);
+    const seasonNumber = numberValue(candidate.season);
+
+    if (videoNumber === undefined) {
+      return false;
+    }
+
+    if (sessionSeasonNumber === undefined) {
+      return videoNumber > sessionVideoNumber;
+    }
+
+    if (seasonNumber === undefined) {
+      return false;
+    }
+
+    return seasonNumber > sessionSeasonNumber || (seasonNumber === sessionSeasonNumber && videoNumber > sessionVideoNumber);
+  });
+}
+
+function previousMediaByEpisodeNumber(media: KinoMedia[], session: PlaybackSession) {
+  const sessionVideoNumber = numberValue(session.videoNumber);
+  if (sessionVideoNumber === undefined) {
+    return undefined;
+  }
+
+  const sessionSeasonNumber = numberValue(session.seasonNumber);
+
+  for (let index = media.length - 1; index >= 0; index -= 1) {
+    const candidate = media[index];
+    if (!candidate) {
+      continue;
+    }
+
+    const videoNumber = numberValue(candidate.number);
+    const seasonNumber = numberValue(candidate.season);
+
+    if (videoNumber === undefined) {
+      continue;
+    }
+
+    if (sessionSeasonNumber === undefined) {
+      if (videoNumber < sessionVideoNumber) {
+        return candidate;
+      }
+      continue;
+    }
+
+    if (seasonNumber === undefined) {
+      continue;
+    }
+
+    if (seasonNumber < sessionSeasonNumber || (seasonNumber === sessionSeasonNumber && videoNumber < sessionVideoNumber)) {
+      return candidate;
+    }
+  }
+
+  return undefined;
 }
 
 function formatRuntime(value: number | string | undefined | unknown) {

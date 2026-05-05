@@ -10,34 +10,46 @@ const LANGUAGE_ALIASES: Record<string, string> = {
   en: "en",
   eng: "en",
   english: "en",
+  английский: "en",
+  англ: "en",
   ru: "ru",
   rus: "ru",
   russian: "ru",
+  русский: "ru",
+  рус: "ru",
   uk: "uk",
   ukr: "uk",
   ua: "uk",
   ukrainian: "uk",
+  українська: "uk",
+  украинский: "uk",
+  укр: "uk",
   de: "de",
   ger: "de",
   deu: "de",
   german: "de",
+  немецкий: "de",
   fr: "fr",
   fre: "fr",
   fra: "fr",
   french: "fr",
+  французский: "fr",
   es: "es",
   spa: "es",
   spanish: "es",
+  испанский: "es",
   nl: "nl",
   dut: "nl",
   nld: "nl",
-  dutch: "nl"
+  dutch: "nl",
+  голландский: "nl",
+  нидерландский: "nl"
 };
 
 export function readTrackPreferences(): TrackPreferences {
   try {
-    const value = JSON.parse(localStorage.getItem(KEY) || "{}") as TrackPreferences;
-    return value && typeof value === "object" ? value : {};
+    const value = JSON.parse(localStorage.getItem(KEY) || "{}") as unknown;
+    return normalizeTrackPreferences(value);
   } catch {
     localStorage.removeItem(KEY);
     return {};
@@ -86,7 +98,7 @@ export function normalizeLanguage(value: string | undefined) {
     return direct;
   }
 
-  const words = lowered.match(/[a-zа-яё]+/gi) ?? [];
+  const words = lowered.match(/\p{L}+/gu) ?? [];
   for (const word of words) {
     const mapped = LANGUAGE_ALIASES[word];
     if (mapped) {
@@ -95,4 +107,29 @@ export function normalizeLanguage(value: string | undefined) {
   }
 
   return lowered.slice(0, 2);
+}
+
+function normalizeTrackPreferences(value: unknown): TrackPreferences {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const candidate = value as Partial<Record<keyof TrackPreferences, unknown>>;
+  const preferences: TrackPreferences = {};
+  const audioLang = normalizeLanguage(typeof candidate.audioLang === "string" ? candidate.audioLang : undefined);
+  const subtitleLang = normalizeLanguage(typeof candidate.subtitleLang === "string" ? candidate.subtitleLang : undefined);
+
+  if (audioLang) {
+    preferences.audioLang = audioLang;
+  }
+
+  if (subtitleLang) {
+    preferences.subtitleLang = subtitleLang;
+  }
+
+  if (typeof candidate.subtitlesOff === "boolean") {
+    preferences.subtitlesOff = candidate.subtitlesOff;
+  }
+
+  return preferences;
 }

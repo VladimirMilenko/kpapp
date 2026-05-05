@@ -77,7 +77,7 @@ export function activeCue(cues: SubtitleCue[], time: number) {
 
     if (time < cue.start) {
       high = middle - 1;
-    } else if (time > cue.end) {
+    } else if (time >= cue.end) {
       low = middle + 1;
     } else {
       return cue.text;

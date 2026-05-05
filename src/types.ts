@@ -237,12 +237,24 @@ export interface PlaybackSession {
   itemId?: string | number;
   seasonNumber?: number;
   videoNumber?: number;
+  watched?: boolean;
 }
 
 export interface PlaybackProgress {
   currentTime: number;
   duration: number;
   completed: boolean;
+}
+
+export interface PlayerEpisodeCard {
+  id: string;
+  media: KinoMedia;
+  title: string;
+  meta: string;
+  progressLabel: string;
+  progressPercent: number;
+  active: boolean;
+  watched: boolean;
 }
 
 export interface PlayerSnapshot {

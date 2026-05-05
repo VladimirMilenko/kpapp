@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent, RefObject } from "react";
+import { PosterImage } from "../components/PosterImage";
 import { TopBar } from "../components/TopBar";
 import { useImagePreload } from "../hooks/useImagePreload";
-import { cardPosterOf, escapeCssUrl, metaLine, synopsisOf, titleOf } from "../media";
+import { cardPosterCandidatesOf, cardPosterOf, metaLine, synopsisOf, titleOf } from "../media";
 import { readSearchHistory } from "../searchHistory";
 import type { KinoItem } from "../types";
-import { cssVars } from "../ui";
 
 export function SearchScreen({
   query,
@@ -216,7 +216,7 @@ export function SearchResultGrid({
     <>
       <div className="search-grid">
         {items.map((item, index) => {
-          const poster = cardPosterOf(item);
+          const posterUrls = cardPosterCandidatesOf(item);
           return (
             <button
               key={String(item.id ?? `${idPrefix}-${index}`)}
@@ -225,7 +225,7 @@ export function SearchResultGrid({
               data-focusable
               onClick={() => onOpen(item.id)}
             >
-              <span className="search-result-poster" style={poster ? cssVars({ "--poster": `url("${escapeCssUrl(poster)}")` }) : undefined} />
+              <PosterImage urls={posterUrls} className="search-result-poster" alt="" />
               <span className="search-result-copy">
                 <span className="search-result-title">{titleOf(item)}</span>
                 <span className="search-result-meta">{metaLine(item)}</span>

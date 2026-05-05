@@ -1,14 +1,15 @@
 import { useEffect } from "react";
 import { MediaSection } from "../components/MediaSection";
+import { PosterImage } from "../components/PosterImage";
 import { useImagePreload } from "../hooks/useImagePreload";
-import { escapeCssUrl, mediaDomId, mediaProgressOf, mediaRowsOf, metaLine, posterOf, resumeMediaOf, synopsisOf, titleOf } from "../media";
+import { mediaDomId, mediaProgressOf, mediaRowsOf, metaLine, posterCandidatesOf, posterOf, resumeMediaOf, synopsisOf, titleOf } from "../media";
 import type { MediaRow } from "../media";
 import type { KinoItem, KinoMedia } from "../types";
-import { cssVars } from "../ui";
 
 export function DetailScreen({ item, onHome, onPlay }: { item: KinoItem; onHome: () => void; onPlay: (media: KinoMedia) => void }) {
   const rows = mediaRowsOf(item);
   const poster = posterOf(item);
+  const posterUrls = posterCandidatesOf(item);
   const fallbackMedia = rows.find((row) => row.items.length)?.items[0];
   const resumeMedia = resumeMediaOf(item);
   const primaryMedia = resumeMedia ?? fallbackMedia;
@@ -36,15 +37,15 @@ export function DetailScreen({ item, onHome, onPlay }: { item: KinoItem; onHome:
       onKeyDownCapture={(event) => {
         if (event.key === "ArrowUp" && document.activeElement instanceof HTMLElement && document.activeElement.dataset.detailPlay === "true") {
           event.preventDefault();
-          event.currentTarget.querySelector<HTMLElement>("[data-detail-back='true']")?.focus();
+          focusBackButton(event.currentTarget);
         }
       }}
     >
-      <button className="back-button" type="button" data-focusable data-detail-back="true" onClick={onHome}>
+      <button className="back-button" type="button" data-focusable data-detail-back="true" onFocus={(event) => scrollDetailTop(event.currentTarget)} onClick={onHome}>
         Back
       </button>
       <section className="detail-layout">
-        <div className="detail-poster" style={poster ? cssVars({ "--poster": `url("${escapeCssUrl(poster)}")` }) : undefined} />
+        <PosterImage urls={posterUrls} className="detail-poster" alt="" loading="eager" />
         <div className="detail-copy">
           <div className="kicker">{item.type || "Title"}</div>
           <h1>{titleOf(item)}</h1>
@@ -73,6 +74,30 @@ export function DetailScreen({ item, onHome, onPlay }: { item: KinoItem; onHome:
       {!rows.some((row) => row.items.length) && <section className="message-strip">No playable videos were returned for this item.</section>}
     </main>
   );
+}
+
+function focusBackButton(container: HTMLElement) {
+  scrollDetailTop(container);
+  container.querySelector<HTMLElement>("[data-detail-back='true']")?.focus();
+}
+
+function scrollDetailTop(element: HTMLElement) {
+  const scrollTargets = new Set<HTMLElement>();
+  const detailScreen = element.closest<HTMLElement>(".detail-screen");
+  const appRoot = element.closest<HTMLElement>(".app-root");
+
+  if (detailScreen) {
+    scrollTargets.add(detailScreen);
+  }
+
+  if (appRoot) {
+    scrollTargets.add(appRoot);
+  }
+
+  scrollTargets.add(document.documentElement);
+  scrollTargets.add(document.body);
+
+  scrollTargets.forEach((target) => target.scrollTo({ top: 0, behavior: "smooth" }));
 }
 
 function detailBadges(item: KinoItem, rows: MediaRow[], media: KinoMedia | undefined) {

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { normalizeImageUrls, preloadImage } from "../imageFallback";
 
 const preloaded = new Set<string>();
 const queue: string[] = [];
@@ -17,8 +18,8 @@ export function useImagePreload(urls: Array<string | undefined>, limit = 16) {
 }
 
 export function preloadImages(urls: Array<string | undefined>, limit = 16) {
-  for (const url of urls.filter(Boolean).slice(0, limit)) {
-    if (!url || preloaded.has(url)) {
+  for (const url of normalizeImageUrls(urls).slice(0, limit)) {
+    if (preloaded.has(url)) {
       continue;
     }
 
@@ -39,9 +40,7 @@ function schedulePreload() {
     const url = queue.shift();
 
     if (url) {
-      const image = new Image();
-      image.decoding = "async";
-      image.src = url;
+      void preloadImage(url);
     }
 
     schedulePreload();

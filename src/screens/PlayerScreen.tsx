@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent } from "react";
+import { ArrowLeft, AudioLines, Captions, FastForward, Palette, Pause, Play, Rewind, SkipBack, SkipForward, SlidersHorizontal } from "lucide-react";
 import { SettingsPanel } from "../components/SettingsPanel";
 import type { SettingsPanelKind } from "../components/SettingsPanel";
 import { clamp, formatClock, getFocusable } from "../dom";
@@ -14,7 +15,7 @@ import {
   subtitleBackgroundClass
 } from "../subtitleAppearance";
 import type { SubtitleAppearanceAction } from "../subtitleAppearance";
-import type { PlaybackProgress, PlaybackSession, PlayerSnapshot } from "../types";
+import type { KinoMedia, PlaybackProgress, PlayerEpisodeCard, PlaybackSession, PlayerSnapshot } from "../types";
 import { cssVars } from "../ui";
 
 type PlayerFeedback = {
@@ -23,17 +24,26 @@ type PlayerFeedback = {
 };
 
 type PlayerCommand = "back" | "playpause" | "rewind" | "forward" | "left" | "right" | "up" | "down" | "enter";
+const AUTO_ADVANCE_REMAINING_SECONDS = 1.5;
 
 export function PlayerScreen({
   session,
+  episodes,
+  previousEpisode,
+  nextEpisode,
   onClose,
   onProgress,
-  onEnded
+  onEnded,
+  onSelectEpisode
 }: {
   session: PlaybackSession;
+  episodes?: PlayerEpisodeCard[];
+  previousEpisode?: PlayerEpisodeCard | undefined;
+  nextEpisode?: PlayerEpisodeCard | undefined;
   onClose: () => void;
   onProgress: (progress: PlaybackProgress) => void;
   onEnded: () => void;
+  onSelectEpisode?: (media: KinoMedia, options?: { restart: boolean }) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const subtitleRef = useRef<HTMLDivElement | null>(null);
@@ -45,6 +55,7 @@ export function PlayerScreen({
   const pausedRef = useRef(true);
   const controlsHiddenRef = useRef(false);
   const latestSnapshotRef = useRef<PlayerSnapshot | null>(null);
+  const episodeDrawerOpenRef = useRef(false);
   const lastProgressRef = useRef({ sentAt: 0, currentTime: 0 });
   const endedHandledRef = useRef(false);
   const seekBurstRef = useRef({ direction: 0, stepIndex: 0, at: 0 });
@@ -52,6 +63,7 @@ export function PlayerScreen({
   const [snapshot, setSnapshot] = useState<PlayerSnapshot | null>(null);
   const [settingsPanel, setSettingsPanel] = useState<SettingsPanelKind | null>(null);
   const [controlsHidden, setControlsHidden] = useState(false);
+  const [episodeDrawerOpen, setEpisodeDrawerOpen] = useState(false);
   const [feedback, setFeedback] = useState<PlayerFeedback | null>(null);
   const [subtitleAppearance, setSubtitleAppearance] = useState(readSubtitleAppearance);
 
@@ -67,6 +79,10 @@ export function PlayerScreen({
   useEffect(() => {
     controlsHiddenRef.current = controlsHidden;
   }, [controlsHidden]);
+
+  useEffect(() => {
+    episodeDrawerOpenRef.current = episodeDrawerOpen;
+  }, [episodeDrawerOpen]);
 
   useEffect(() => {
     if (!settingsPanel) {
@@ -91,6 +107,7 @@ export function PlayerScreen({
       return;
     }
 
+    setEpisodeDrawerOpen(false);
     const player = new TvPlayer(video, subtitle, setSnapshot);
     endedHandledRef.current = false;
     playerRef.current = player;
@@ -108,14 +125,13 @@ export function PlayerScreen({
   }, [session]);
 
   useEffect(() => {
-    if (!snapshot?.ended || endedHandledRef.current) {
+    if (!snapshot || !shouldAutoAdvance(snapshot) || endedHandledRef.current) {
       return;
     }
 
     endedHandledRef.current = true;
-    const timer = window.setTimeout(onEnded, 1200);
-    return () => window.clearTimeout(timer);
-  }, [onEnded, snapshot?.ended]);
+    onEnded();
+  }, [onEnded, snapshot?.currentTime, snapshot?.duration, snapshot?.ended]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -134,6 +150,8 @@ export function PlayerScreen({
       if (command === "back") {
         if (panelRef.current) {
           closeSettingsPanel();
+        } else if (episodeDrawerOpenRef.current) {
+          closeEpisodeDrawer();
         } else {
           onClose();
         }
@@ -204,6 +222,8 @@ export function PlayerScreen({
     window.clearTimeout(hideTimerRef.current);
     controlsHiddenRef.current = true;
     setControlsHidden(true);
+    episodeDrawerOpenRef.current = false;
+    setEpisodeDrawerOpen(false);
     activeElementInPlayer()?.blur();
   }
 
@@ -311,6 +331,17 @@ export function PlayerScreen({
     showFeedback(paused ? "Play" : "Pause");
   }
 
+  function selectEpisode(episode: PlayerEpisodeCard | undefined) {
+    if (!episode || episode.active) {
+      return;
+    }
+
+    episodeDrawerOpenRef.current = false;
+    setEpisodeDrawerOpen(false);
+    setSettingsPanel(null);
+    onSelectEpisode?.(episode.media, { restart: episode.watched });
+  }
+
   function activateFocusedControl() {
     const active = activeElementInPlayer();
 
@@ -324,6 +355,8 @@ export function PlayerScreen({
 
   function toggleSettingsPanel(kind: SettingsPanelKind) {
     showControls();
+    episodeDrawerOpenRef.current = false;
+    setEpisodeDrawerOpen(false);
 
     if (panelRef.current === kind) {
       closeSettingsPanel();
@@ -348,6 +381,52 @@ export function PlayerScreen({
 
   function focusTimeline() {
     shellRef.current?.querySelector<HTMLElement>(".timeline")?.focus();
+  }
+
+  function focusEpisodeStrip() {
+    const active = shellRef.current?.querySelector<HTMLElement>(".player-episode-card.is-active");
+    const first = shellRef.current?.querySelector<HTMLElement>(".player-episode-card");
+
+    (active ?? first)?.focus({ preventScroll: true });
+  }
+
+  function alignEpisodeStrip() {
+    const strip = shellRef.current?.querySelector<HTMLElement>(".player-episode-strip");
+    const target =
+      strip?.querySelector<HTMLElement>(".player-episode-card.is-active") ?? strip?.querySelector<HTMLElement>(".player-episode-card");
+
+    if (!strip || !target) {
+      return;
+    }
+
+    const stripRect = strip.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const targetCenter = targetRect.left - stripRect.left + strip.scrollLeft + targetRect.width / 2;
+    strip.scrollTo({ left: Math.max(0, targetCenter - strip.clientWidth / 2), behavior: "auto" });
+  }
+
+  function hasEpisodeStrip() {
+    return Boolean(shellRef.current?.querySelector(".player-episode-card"));
+  }
+
+  function openEpisodeDrawer() {
+    if (!hasEpisodeStrip()) {
+      return false;
+    }
+
+    showControls();
+    setSettingsPanel(null);
+    alignEpisodeStrip();
+    episodeDrawerOpenRef.current = true;
+    setEpisodeDrawerOpen(true);
+    window.requestAnimationFrame(() => focusEpisodeStrip());
+    return true;
+  }
+
+  function closeEpisodeDrawer() {
+    episodeDrawerOpenRef.current = false;
+    setEpisodeDrawerOpen(false);
+    window.setTimeout(() => focusPrimaryControl(), 0);
   }
 
   function focusSettingsButton(kind: SettingsPanelKind) {
@@ -381,8 +460,28 @@ export function PlayerScreen({
         return;
       }
 
+      if (active?.dataset.playerFocusZone === "episodes") {
+        closeEpisodeDrawer();
+        return;
+      }
+
       if (active?.dataset.playerFocusZone === "controls") {
         focusTimeline();
+        return;
+      }
+    }
+
+    if (direction === "down") {
+      if (active?.dataset.playerFocusZone === "controls" && openEpisodeDrawer()) {
+        return;
+      }
+
+      if (active?.dataset.playerFocusZone === "timeline") {
+        focusPrimaryControl();
+        return;
+      }
+
+      if (active?.dataset.playerFocusZone === "episodes") {
         return;
       }
     }
@@ -406,7 +505,7 @@ export function PlayerScreen({
 
   function moveHorizontalControlFocus(direction: -1 | 1) {
     const active = activeElementInPlayer();
-    const row = active?.closest<HTMLElement>(".control-row, .error-action-row");
+    const row = active?.closest<HTMLElement>(".control-row, .error-action-row, .player-episode-strip");
 
     if (!row) {
       return false;
@@ -437,9 +536,16 @@ export function PlayerScreen({
   const selectedSubtitle = selectedOptionLabel(snapshot?.subtitleOptions, snapshot?.selectedSubtitleId, "Off");
   const subtitleStyleSummary = subtitleAppearanceSummary(subtitleAppearance);
   const subtitleStyleOptions = subtitleAppearanceOptions(subtitleAppearance);
+  const episodeCards = episodes ?? [];
+  const hasEpisodes = episodeCards.length > 0;
+  const canSelectPreviousEpisode = Boolean(previousEpisode && onSelectEpisode);
+  const canSelectNextEpisode = Boolean(nextEpisode && onSelectEpisode);
 
   return (
-    <main ref={shellRef} className={`player-shell${controlsHidden ? " controls-hidden" : ""}`}>
+    <main
+      ref={shellRef}
+      className={`player-shell${controlsHidden ? " controls-hidden" : ""}${episodeDrawerOpen ? " episodes-open" : ""}`}
+    >
       <video ref={videoRef} className="player-video" playsInline preload="auto" poster={session.poster} />
       <div
         ref={subtitleRef}
@@ -499,29 +605,64 @@ export function PlayerScreen({
           <span className="time-duration">{formatClock(snapshot?.duration || 0)}</span>
         </div>
         <div className="control-row">
-          <button className="round-button" type="button" data-focusable data-player-focus-zone="controls" onClick={onClose}>Back</button>
-          <button className="round-button skip-button" type="button" data-focusable data-player-focus-zone="controls" onClick={() => seekByWithFeedback(-10)}>-10s</button>
-          <button className="round-button play-toggle" type="button" data-focusable data-player-focus-zone="controls" onClick={togglePlayWithFeedback}>
-            {snapshot?.paused ? "Play" : "Pause"}
+          <button className="round-button icon-button" type="button" aria-label="Back" title="Back" data-focusable data-player-focus-zone="controls" onClick={onClose}>
+            <ArrowLeft aria-hidden="true" />
           </button>
-          <button className="round-button skip-button" type="button" data-focusable data-player-focus-zone="controls" onClick={() => seekByWithFeedback(10)}>+10s</button>
-          <button className="pill-button track-button" type="button" data-focusable data-player-focus-zone="controls" data-settings-button="quality" onClick={() => toggleSettingsPanel("quality")}>
-            <span>Quality</span>
+          {hasEpisodes && (
+            <button
+              className="round-button icon-button episode-step-button"
+              type="button"
+              disabled={!canSelectPreviousEpisode}
+              aria-label={previousEpisode ? `Previous episode: ${previousEpisode.title}` : "Previous episode"}
+              title="Previous episode"
+              data-focusable={canSelectPreviousEpisode || undefined}
+              data-player-focus-zone="controls"
+              onClick={() => selectEpisode(previousEpisode)}
+            >
+              <SkipBack aria-hidden="true" />
+            </button>
+          )}
+          <button className="round-button icon-button skip-button" type="button" aria-label="Rewind 10 seconds" title="Rewind 10 seconds" data-focusable data-player-focus-zone="controls" onClick={() => seekByWithFeedback(-10)}>
+            <Rewind aria-hidden="true" />
+          </button>
+          <button className="round-button icon-button play-toggle" type="button" aria-label={snapshot?.paused ? "Play" : "Pause"} title={snapshot?.paused ? "Play" : "Pause"} data-focusable data-player-focus-zone="controls" onClick={togglePlayWithFeedback}>
+            {snapshot?.paused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />}
+          </button>
+          <button className="round-button icon-button skip-button" type="button" aria-label="Forward 10 seconds" title="Forward 10 seconds" data-focusable data-player-focus-zone="controls" onClick={() => seekByWithFeedback(10)}>
+            <FastForward aria-hidden="true" />
+          </button>
+          {hasEpisodes && (
+            <button
+              className="round-button icon-button episode-step-button"
+              type="button"
+              disabled={!canSelectNextEpisode}
+              aria-label={nextEpisode ? `Next episode: ${nextEpisode.title}` : "Next episode"}
+              title="Next episode"
+              data-focusable={canSelectNextEpisode || undefined}
+              data-player-focus-zone="controls"
+              onClick={() => selectEpisode(nextEpisode)}
+            >
+              <SkipForward aria-hidden="true" />
+            </button>
+          )}
+          <button className="pill-button track-button" type="button" aria-label={`Quality: ${selectedQuality}`} title="Quality" data-focusable data-player-focus-zone="controls" data-settings-button="quality" onClick={() => toggleSettingsPanel("quality")}>
+            <SlidersHorizontal aria-hidden="true" />
             <strong>{selectedQuality}</strong>
           </button>
-          <button className="pill-button track-button" type="button" data-focusable data-player-focus-zone="controls" data-settings-button="audio" onClick={() => toggleSettingsPanel("audio")}>
-            <span>Audio</span>
+          <button className="pill-button track-button" type="button" aria-label={`Audio: ${selectedAudio}`} title="Audio" data-focusable data-player-focus-zone="controls" data-settings-button="audio" onClick={() => toggleSettingsPanel("audio")}>
+            <AudioLines aria-hidden="true" />
             <strong>{selectedAudio}</strong>
           </button>
-          <button className="pill-button track-button" type="button" data-focusable data-player-focus-zone="controls" data-settings-button="subtitles" onClick={() => toggleSettingsPanel("subtitles")}>
-            <span>Subs</span>
+          <button className="pill-button track-button" type="button" aria-label={`Subtitles: ${selectedSubtitle}`} title="Subtitles" data-focusable data-player-focus-zone="controls" data-settings-button="subtitles" onClick={() => toggleSettingsPanel("subtitles")}>
+            <Captions aria-hidden="true" />
             <strong>{selectedSubtitle}</strong>
           </button>
-          <button className="pill-button track-button" type="button" data-focusable data-player-focus-zone="controls" data-settings-button="subtitleStyle" onClick={() => toggleSettingsPanel("subtitleStyle")}>
-            <span>Style</span>
+          <button className="pill-button track-button" type="button" aria-label={`Subtitle style: ${subtitleStyleSummary}`} title="Subtitle style" data-focusable data-player-focus-zone="controls" data-settings-button="subtitleStyle" onClick={() => toggleSettingsPanel("subtitleStyle")}>
+            <Palette aria-hidden="true" />
             <strong>{subtitleStyleSummary}</strong>
           </button>
         </div>
+        {hasEpisodes && <div className="player-episodes-hint" aria-hidden="true">Episodes below</div>}
         {snapshot?.error && (
           <div className="player-error-card" role="alert">
             <div>
@@ -546,6 +687,37 @@ export function PlayerScreen({
         )}
         <SettingsPanel snapshot={snapshot} panel={settingsPanel} subtitleStyleOptions={subtitleStyleOptions} onSelect={selectOption} />
       </section>
+      {hasEpisodes && (
+        <section className="player-episode-drawer" aria-label="Episodes">
+          <div className="player-episode-drawer-heading">
+            <span>Episodes</span>
+            <strong>Press Up to return</strong>
+          </div>
+          <div className="player-episode-strip">
+            {episodeCards.map((episode) => (
+              <button
+                key={episode.id}
+                className={`player-episode-card${episode.active ? " is-active" : ""}${episode.watched ? " is-watched" : ""}`}
+                type="button"
+                data-focusable={episodeDrawerOpen || undefined}
+                data-focus-hidden={episodeDrawerOpen || undefined}
+                data-player-focus-zone="episodes"
+                tabIndex={episodeDrawerOpen ? 0 : -1}
+                onClick={() => selectEpisode(episode)}
+              >
+                <span className="player-episode-kicker">{episode.meta}</span>
+                <span className="player-episode-title">{episode.title}</span>
+                <span className="player-episode-status">{episode.progressLabel}</span>
+                {episode.progressPercent > 0 && (
+                  <span className="player-episode-progress" aria-hidden="true">
+                    <span style={{ width: `${episode.progressPercent}%` }} />
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   );
 }
@@ -598,4 +770,16 @@ function selectedOptionLabel(
   fallback: string
 ) {
   return options?.find((option) => option.id === selectedId)?.label || fallback;
+}
+
+function shouldAutoAdvance(snapshot: PlayerSnapshot) {
+  if (snapshot.ended) {
+    return true;
+  }
+
+  if (!snapshot.duration || !Number.isFinite(snapshot.duration) || snapshot.currentTime <= 0) {
+    return false;
+  }
+
+  return snapshot.duration - snapshot.currentTime <= AUTO_ADVANCE_REMAINING_SECONDS;
 }
