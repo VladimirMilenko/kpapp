@@ -1,0 +1,16 @@
+{
+  "id": "com.kino-pub.lgtv",
+  "version": "0.1.0",
+  "vendor": "kino-pub",
+  "type": "web",
+  "main": "index.html",
+  "resolution": "1920x1080",
+  "title": "Kino.pub",
+  "icon": "assets/icon-80.png",
+  "largeIcon": "assets/icon-130.png",
+  "bgColor": "#050505",
+  "transparent": false,
+  "handlesRelaunch": true,
+  "disableBackHistoryAPI": true,
+  "requiredPermissions": []
+}

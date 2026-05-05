@@ -1,0 +1,31 @@
+{
+  "name": "kino-pub-lg-tv",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bunx --bun vite --host 0.0.0.0",
+    "build": "bunx --bun vite build && bun run scripts/webos.ts",
+    "preview": "bunx --bun vite preview --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "package:webos": "bun run build && ares-package -n -o dist dist",
+    "install:webos": "ares-install --device tv dist/com.kino-pub.lgtv_0.1.0_all.ipk",
+    "launch:webos": "ares-launch --device tv com.kino-pub.lgtv",
+    "launch:simulator": "bun run build && ares-launch -s ${WEBOS_SIMULATOR_VERSION:-26} -sp ${WEBOS_SIMULATOR_PATH:-$HOME/Downloads/webOS_TV_26_Simulator_1.5.0} dist"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.0.0",
+    "hls.js": "^1.6.13",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "react-router": "^7.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.1",
+    "@types/bun": "latest",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.6"
+  }
+}
