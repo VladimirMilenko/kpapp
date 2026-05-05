@@ -53,7 +53,7 @@ export function HomeScreen({
   useImagePreload([posterOf(firstItem ?? {}), ...visibleItems.map(railPosterOf)], 14);
 
   function scrollToHero() {
-    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    mainRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }
 
   return (

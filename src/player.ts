@@ -14,8 +14,10 @@ type VideoFrameCallbackVideo = HTMLVideoElement & {
 const STARTUP_BUFFER_TIMEOUT_MS = 4_500;
 const FIRST_FRAME_TIMEOUT_MS = 1_200;
 const MIN_STARTUP_BUFFER_SECONDS = 0.45;
+const TIMELINE_EMIT_INTERVAL_MS = 250;
 const HAVE_CURRENT_DATA = 2;
 const HAVE_FUTURE_DATA = 3;
+const THROTTLED_VIDEO_EVENTS = new Set(["progress", "timeupdate"]);
 
 export class TvPlayer {
   private hls: Hls | null = null;
@@ -35,6 +37,8 @@ export class TvPlayer {
   private needsFirstFrameGuard = false;
   private playIntent = 0;
   private suppressEmitDepth = 0;
+  private emitTimer: number | undefined;
+  private lastEmitAt = 0;
   private lastSnapshot: PlayerSnapshot | null = null;
   private readonly onState: PlayerEventHandler;
   private readonly unsubscribers: Array<() => void> = [];
@@ -77,6 +81,7 @@ export class TvPlayer {
     this.playIntent += 1;
     this.preparingPlayback = false;
     this.loading = false;
+    window.clearTimeout(this.emitTimer);
     this.destroyHls();
     this.unsubscribers.splice(0).forEach((unsubscribe) => unsubscribe());
     this.video.pause();
@@ -506,7 +511,11 @@ export class TvPlayer {
           this.clearResolvedError();
         }
         this.updateSubtitle();
-        this.emit();
+        if (THROTTLED_VIDEO_EVENTS.has(eventName)) {
+          this.emitThrottled();
+        } else {
+          this.emit();
+        }
       };
       this.video.addEventListener(eventName, handler);
       this.unsubscribers.push(() => this.video.removeEventListener(eventName, handler));
@@ -645,9 +654,33 @@ export class TvPlayer {
       return;
     }
 
+    window.clearTimeout(this.emitTimer);
+    this.emitTimer = undefined;
     const snapshot = this.createSnapshot();
     this.lastSnapshot = snapshot;
+    this.lastEmitAt = Date.now();
     this.onState(snapshot);
+  }
+
+  private emitThrottled() {
+    if (this.suppressEmitDepth > 0) {
+      return;
+    }
+
+    const remaining = TIMELINE_EMIT_INTERVAL_MS - (Date.now() - this.lastEmitAt);
+    if (remaining <= 0) {
+      this.emit();
+      return;
+    }
+
+    if (this.emitTimer !== undefined) {
+      return;
+    }
+
+    this.emitTimer = window.setTimeout(() => {
+      this.emitTimer = undefined;
+      this.emit();
+    }, remaining);
   }
 
   private createSnapshot(): PlayerSnapshot {

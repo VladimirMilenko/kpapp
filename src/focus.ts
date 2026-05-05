@@ -62,7 +62,7 @@ export function handleSpatialNavigation(event: KeyboardEvent, container: ParentN
 
   event.preventDefault();
   best.node.focus();
-  best.node.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  best.node.scrollIntoView({ behavior: "auto", block: "nearest", inline: "nearest" });
   return true;
 }
 

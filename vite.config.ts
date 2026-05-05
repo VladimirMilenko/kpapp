@@ -22,7 +22,7 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     assetsDir: "assets",
-    sourcemap: true,
+    sourcemap: false,
     target: "chrome120",
     modulePreload: false,
     chunkSizeWarningLimit: 650,
