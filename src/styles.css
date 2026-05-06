@@ -776,6 +776,25 @@ input:focus-visible,
   -webkit-line-clamp: 3;
 }
 
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: center;
+  margin-top: 1.25rem;
+}
+
+.detail-actions .primary-action,
+.detail-actions .secondary-action {
+  margin-top: 0;
+}
+
+.detail-watch-button.is-active {
+  color: #fff;
+  background: rgba(31, 191, 117, 0.26);
+  border: 1px solid rgba(31, 191, 117, 0.42);
+}
+
 .badge-row {
   display: flex;
   flex-wrap: wrap;

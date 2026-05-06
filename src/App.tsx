@@ -587,8 +587,41 @@ function DetailRoute() {
     enabled: Boolean(id),
     staleTime: QUERY_STALE_TIME.item
   });
+  const watchlistSupported = Boolean(query.data && supportsWatchlist(query.data));
+  const watchlistQuery = useQuery({
+    queryKey: kinoQueryKeys.watchlist(),
+    queryFn: () => api.watchlistSerials(),
+    enabled: watchlistSupported,
+    staleTime: QUERY_STALE_TIME.home
+  });
+  const watchlistMutation = useMutation({
+    mutationFn: ({ itemId }: { itemId: string | number; nextWatching: boolean; item: KinoItem }) => api.toggleWatchlist(itemId),
+    async onMutate({ item, nextWatching }) {
+      await queryClient.cancelQueries({ queryKey: kinoQueryKeys.watchlist() });
+      const previous = queryClient.getQueryData<KinoItem[]>(kinoQueryKeys.watchlist());
+      queryClient.setQueryData<KinoItem[]>(kinoQueryKeys.watchlist(), (current) => setWatchlistItem(current, item, nextWatching));
+      return { previous };
+    },
+    onError(_error, _variables, context) {
+      if (context?.previous) {
+        queryClient.setQueryData(kinoQueryKeys.watchlist(), context.previous);
+      }
+    },
+    onSuccess(watching, { item, nextWatching }) {
+      queryClient.setQueryData<KinoItem[]>(kinoQueryKeys.watchlist(), (current) =>
+        setWatchlistItem(current, item, watching ?? nextWatching)
+      );
+    },
+    onSettled() {
+      void queryClient.invalidateQueries({ queryKey: kinoQueryKeys.home() });
+      void queryClient.invalidateQueries({ queryKey: kinoQueryKeys.watchlist() });
+      if (id) {
+        void queryClient.invalidateQueries({ queryKey: kinoQueryKeys.item(id) });
+      }
+    }
+  });
 
-  useAuthRedirect(query.error);
+  useAuthRedirect(query.error || watchlistQuery.error || watchlistMutation.error);
 
   if (!id) {
     return <Navigate to="/home" replace />;
@@ -602,9 +635,24 @@ function DetailRoute() {
     return <ErrorScreen message={errorMessage(query.error)} onRetry={() => void query.refetch()} />;
   }
 
+  const watching = watchlistContains(watchlistQuery.data, query.data.id);
+  const watchlistDisabled = watchlistSupported && (watchlistQuery.isPending || watchlistQuery.isError || watchlistMutation.isPending);
+
   return (
     <DetailScreen
       item={query.data}
+      watchingSupported={watchlistSupported}
+      watching={watching}
+      watchingSaving={watchlistMutation.isPending}
+      watchingLoading={watchlistSupported && watchlistQuery.isPending}
+      watchingDisabled={watchlistDisabled}
+      onToggleWatching={() => {
+        if (query.data.id === undefined || watchlistDisabled) {
+          return;
+        }
+
+        watchlistMutation.mutate({ itemId: query.data.id, item: query.data, nextWatching: !watching });
+      }}
       onHome={() => navigate("/home")}
       onPlay={(media) => void playItemMedia(query.data, media, api, config, queryClient, navigate)}
     />
@@ -875,6 +923,11 @@ async function hydrateVisibleContinueSections(
   api: KinoApi,
   queryClient: ReturnType<typeof useQueryClient>
 ) {
+  const watchlistSection = sections.find((section) => section.id === "watching");
+  if (watchlistSection) {
+    queryClient.setQueryData(kinoQueryKeys.watchlist(), watchlistSection.items);
+  }
+
   const continueIndex = sections.findIndex((section) => section.mode === "continue");
   const continueSection = sections[continueIndex];
 
@@ -1003,6 +1056,38 @@ async function playNextAfterPlayer(
 function matchingMedia(item: KinoItem, media: KinoMedia) {
   const mediaId = mediaDomId(media);
   return flatMediaOf(item).find((candidate) => mediaDomId(candidate) === mediaId);
+}
+
+function supportsWatchlist(item: KinoItem) {
+  const type = String(item.type ?? item.subtype ?? "").toLowerCase();
+  return type.includes("serial") || type.includes("series") || (Array.isArray(item.seasons) && item.seasons.length > 0);
+}
+
+function watchlistContains(items: KinoItem[] | undefined, itemId: string | number | undefined) {
+  if (itemId === undefined) {
+    return false;
+  }
+
+  return Boolean(items?.some((item) => String(item.id) === String(itemId)));
+}
+
+function setWatchlistItem(items: KinoItem[] | undefined, item: KinoItem, watching: boolean) {
+  if (item.id === undefined) {
+    return items ?? [];
+  }
+
+  const existing = items ?? [];
+  const itemId = String(item.id);
+
+  if (!watching) {
+    return existing.filter((candidate) => String(candidate.id) !== itemId);
+  }
+
+  if (existing.some((candidate) => String(candidate.id) === itemId)) {
+    return existing.map((candidate) => (String(candidate.id) === itemId ? { ...candidate, ...item } : candidate));
+  }
+
+  return [item, ...existing];
 }
 
 async function fetchItem(id: string | number, api: KinoApi, queryClient: ReturnType<typeof useQueryClient>) {

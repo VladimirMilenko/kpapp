@@ -6,7 +6,27 @@ import { mediaDomId, mediaProgressOf, mediaRowsOf, metaLine, posterCandidatesOf,
 import type { MediaRow } from "../media";
 import type { KinoItem, KinoMedia } from "../types";
 
-export function DetailScreen({ item, onHome, onPlay }: { item: KinoItem; onHome: () => void; onPlay: (media: KinoMedia) => void }) {
+export function DetailScreen({
+  item,
+  watchingSupported = false,
+  watching = false,
+  watchingSaving = false,
+  watchingLoading = false,
+  watchingDisabled = false,
+  onHome,
+  onPlay,
+  onToggleWatching
+}: {
+  item: KinoItem;
+  watchingSupported?: boolean;
+  watching?: boolean;
+  watchingSaving?: boolean;
+  watchingLoading?: boolean;
+  watchingDisabled?: boolean;
+  onHome: () => void;
+  onPlay: (media: KinoMedia) => void;
+  onToggleWatching?: () => void;
+}) {
   const rows = mediaRowsOf(item);
   const poster = posterOf(item);
   const posterUrls = posterCandidatesOf(item);
@@ -58,16 +78,29 @@ export function DetailScreen({ item, onHome, onPlay }: { item: KinoItem; onHome:
             ))}
           </div>
           <p>{synopsisOf(item)}</p>
-          <button
-            className="primary-action detail-play-button"
-            type="button"
-            disabled={!primaryMedia}
-            data-focusable={Boolean(primaryMedia) || undefined}
-            data-detail-play="true"
-            onClick={() => primaryMedia && onPlay(primaryMedia)}
-          >
-            {showMediaRows && primaryProgress?.inProgress ? "Continue" : "Play"}
-          </button>
+          <div className="detail-actions">
+            <button
+              className="primary-action detail-play-button"
+              type="button"
+              disabled={!primaryMedia}
+              data-focusable={Boolean(primaryMedia) || undefined}
+              data-detail-play="true"
+              onClick={() => primaryMedia && onPlay(primaryMedia)}
+            >
+              {showMediaRows && primaryProgress?.inProgress ? "Continue" : "Play"}
+            </button>
+            {watchingSupported && onToggleWatching && (
+              <button
+                className={`secondary-action detail-watch-button${watching ? " is-active" : ""}${watchingSaving ? " is-busy" : ""}`}
+                type="button"
+                disabled={watchingDisabled}
+                data-focusable={!watchingDisabled || undefined}
+                onClick={onToggleWatching}
+              >
+                {watchingSaving ? "Saving" : watchingLoading ? "Loading" : watching ? "Watching" : "Add to watching"}
+              </button>
+            )}
+          </div>
         </div>
       </section>
       {showMediaRows && rows.map((row) => <MediaSection key={row.title} item={item} row={row} resumeMediaId={resumeMediaId} onPlay={onPlay} />)}

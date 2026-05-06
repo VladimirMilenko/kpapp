@@ -27,7 +27,7 @@ interface TokenResponse {
 const TOKEN_KEY = "kino.pub.tv.tokens.v1";
 const DEVICE_ID_KEY = "kino.pub.tv.device.id.v1";
 const API_TIMEOUT_MS = 15_000;
-const HOME_CONTINUE_LIMIT = 6;
+const HOME_RAIL_LIMIT = 24;
 
 export class AuthRequiredError extends Error {
   constructor(message = "Kino.pub session expired. Connect the TV again.") {
@@ -170,22 +170,31 @@ export class KinoApi {
   }
 
   async homeSections(): Promise<Section[]> {
-    const [watchingMovies, watchingSerials] = await Promise.all([
-      this.optionalListItems("/v1/watching/movies", {}, 0, HOME_CONTINUE_LIMIT),
-      this.optionalListItems("/v1/watching/serials", {}, 0, HOME_CONTINUE_LIMIT)
+    const [watchingMovies, watchingSerials, watchlistSerials] = await Promise.all([
+      this.optionalListItems("/v1/watching/movies", {}, 0, HOME_RAIL_LIMIT),
+      this.optionalListItems("/v1/watching/serials", {}, 0, HOME_RAIL_LIMIT),
+      this.optionalListItems("/v1/watching/serials", { subscribed: 1 }, 0, HOME_RAIL_LIMIT)
     ]);
-    const continueItems = uniqueItems([...watchingMovies, ...watchingSerials]).slice(0, HOME_CONTINUE_LIMIT);
+    const continueItems = uniqueItems([...watchingMovies, ...watchingSerials]).slice(0, HOME_RAIL_LIMIT);
     const sections: Section[] = [];
 
     if (continueItems.length) {
       sections.push({ id: "continue-watching", title: "Continue where you left off", items: continueItems, mode: "continue" });
     }
 
+    if (watchlistSerials.length) {
+      sections.push({ id: "watching", title: "Watching", items: watchlistSerials.slice(0, HOME_RAIL_LIMIT) });
+    }
+
     if (watchingSerials.length) {
-      sections.push({ id: "watching-serials", title: "Series in progress", items: watchingSerials.slice(0, HOME_CONTINUE_LIMIT) });
+      sections.push({ id: "watching-serials", title: "Series in progress", items: watchingSerials.slice(0, HOME_RAIL_LIMIT) });
     }
 
     return sections.filter((section) => section.items.length);
+  }
+
+  async watchlistSerials(page = 0, perpage = HOME_RAIL_LIMIT) {
+    return this.listItems("/v1/watching/serials", { subscribed: 1 }, page, perpage);
   }
 
   async markWatching(params: {
@@ -228,6 +237,15 @@ export class KinoApi {
     }
 
     return watched;
+  }
+
+  async toggleWatchlist(itemId: string | number | undefined) {
+    if (itemId === undefined) {
+      return undefined;
+    }
+
+    const data = await this.get<unknown>("/v1/watching/togglewatchlist", { id: itemId });
+    return extractWatchlistValue(data);
   }
 
   private async toggleWatched(params: {
@@ -772,4 +790,26 @@ function extractWatchedValue(data: unknown): 0 | 1 | undefined {
   const value = Number(candidate.watched);
 
   return value === 0 || value === 1 ? value : undefined;
+}
+
+function extractWatchlistValue(data: unknown): boolean | undefined {
+  if (!data || typeof data !== "object") {
+    return undefined;
+  }
+
+  const candidate = extractObject<Record<string, unknown>>(data);
+  const value = candidate.watchlist ?? candidate.watching ?? candidate.subscribed;
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const numeric = Number(value);
+    if (numeric === 0 || numeric === 1) {
+      return Boolean(numeric);
+    }
+  }
+
+  return undefined;
 }

@@ -21,6 +21,7 @@ export const kinoQueryKeys = {
   catalogSearch: (query: string, filters: CatalogFilters) =>
     [...kinoQueryKeys.all, "catalog-search", query, filters.type || "", filters.genre || ""] as const,
   history: () => [...kinoQueryKeys.all, "history"] as const,
+  watchlist: () => [...kinoQueryKeys.all, "watchlist"] as const,
   catalogTypes: () => [...kinoQueryKeys.all, "catalog-types"] as const,
   catalogGenres: (type: string | undefined) => [...kinoQueryKeys.all, "catalog-genres", type || "all"] as const,
   deviceInfo: () => [...kinoQueryKeys.all, "device-info"] as const,
