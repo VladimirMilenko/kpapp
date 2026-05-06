@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { MediaSection } from "../components/MediaSection";
 import { PosterImage } from "../components/PosterImage";
+import { scrollIntoViewCompat, scrollToCompat } from "../dom";
 import { useImagePreload } from "../hooks/useImagePreload";
 import { mediaDomId, mediaProgressOf, mediaRowsOf, metaLine, posterCandidatesOf, posterOf, resumeMediaOf, synopsisOf, titleOf } from "../media";
 import type { MediaRow } from "../media";
@@ -25,7 +26,9 @@ export function DetailScreen({ item, onHome, onPlay }: { item: KinoItem; onHome:
         : document.querySelector<HTMLElement>("[data-detail-play='true']");
 
       target?.focus();
-      target?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      if (target) {
+        scrollIntoViewCompat(target, { behavior: "smooth", block: "center", inline: "center" });
+      }
     });
   }, [item.id, resumeMediaId, showMediaRows]);
 
@@ -97,7 +100,7 @@ function scrollDetailTop(element: HTMLElement) {
   scrollTargets.add(document.documentElement);
   scrollTargets.add(document.body);
 
-  scrollTargets.forEach((target) => target.scrollTo({ top: 0, behavior: "smooth" }));
+  scrollTargets.forEach((target) => scrollToCompat(target, { top: 0, behavior: "smooth" }));
 }
 
 function detailBadges(item: KinoItem, rows: MediaRow[], media: KinoMedia | undefined) {

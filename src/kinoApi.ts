@@ -111,7 +111,7 @@ export class KinoApi {
   }
 
   async updateDeviceInfo(params: DeviceInfoInput) {
-    const data = await this.postAuthenticatedJson<unknown>("/v1/device/notify", { ...params });
+    const data = await this.postAuthenticatedForm<unknown>("/v1/device/notify", { ...params });
     const id = extractDeviceId(data);
 
     if (id !== undefined) {
@@ -141,7 +141,7 @@ export class KinoApi {
 
   async updateDeviceSettings(config: KinoRuntimeConfig, updates: Record<string, string | number | boolean>) {
     const deviceId = await this.ensureDeviceId(config);
-    await this.postAuthenticatedJson<unknown>(`/v1/device/${deviceId}/settings`, updates);
+    await this.postAuthenticatedForm<unknown>(`/v1/device/${deviceId}/settings`, updates);
   }
 
   private async ensureDeviceId(config: KinoRuntimeConfig) {
@@ -338,17 +338,14 @@ export class KinoApi {
     return this.fetchJson<T>(url);
   }
 
-  private async postAuthenticatedJson<T>(path: string, body: Record<string, string | number | boolean>) {
+  private async postAuthenticatedForm<T>(path: string, body: Record<string, string | number | boolean>) {
     await this.ensureAccessToken();
     const url = new URL(`${this.apiBase}${path}`);
     url.searchParams.set("access_token", this.tokens?.accessToken ?? "");
 
     return this.fetchJson<T>(url, {
       method: "POST",
-      body: JSON.stringify(body),
-      headers: {
-        "Content-Type": "application/json"
-      }
+      body: formBody(body)
     });
   }
 
@@ -416,20 +413,27 @@ export class KinoApi {
 
   private async fetchJson<T>(pathOrUrl: string | URL, options: RequestOptions = {}): Promise<T> {
     const url = pathOrUrl instanceof URL ? pathOrUrl : new URL(`${this.apiBase}${pathOrUrl}`);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    const controller = createFetchAbortController();
+    let timeout: number | undefined;
 
     try {
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          Accept: "application/json",
-          ...(options.body instanceof URLSearchParams
-            ? { "Content-Type": "application/x-www-form-urlencoded" }
-            : {}),
-          ...options.headers
-        }
+      const response = await new Promise<Response>((resolve, reject) => {
+        timeout = window.setTimeout(() => {
+          controller?.abort();
+          reject(new Error("Kino.pub API request timed out."));
+        }, API_TIMEOUT_MS);
+
+        fetch(url, {
+          ...options,
+          ...(controller ? { signal: controller.signal } : {}),
+          headers: {
+            Accept: "application/json",
+            ...(options.body instanceof URLSearchParams
+              ? { "Content-Type": "application/x-www-form-urlencoded" }
+              : {}),
+            ...options.headers
+          }
+        }).then(resolve, reject);
       });
 
       const text = await response.text();
@@ -475,13 +479,13 @@ export class KinoApi {
 
       return json as T;
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
+      if (isAbortError(error)) {
         throw new Error("Kino.pub API request timed out.");
       }
 
       throw error;
     } finally {
-      clearTimeout(timeout);
+      window.clearTimeout(timeout);
     }
   }
 
@@ -507,6 +511,32 @@ export class KinoApi {
     localStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
     return tokens;
   }
+}
+
+function createFetchAbortController() {
+  if (typeof AbortController === "undefined" || typeof Request === "undefined" || !("signal" in Request.prototype)) {
+    return undefined;
+  }
+
+  return new AbortController();
+}
+
+function formBody(params: Record<string, string | number | boolean>) {
+  const body = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    body.set(key, String(value));
+  }
+
+  return body;
+}
+
+function isAbortError(error: unknown) {
+  if (typeof DOMException !== "undefined" && error instanceof DOMException && error.name === "AbortError") {
+    return true;
+  }
+
+  return Boolean(error && typeof error === "object" && "name" in error && (error as { name?: string }).name === "AbortError");
 }
 
 function deviceInfoFromConfig(config: KinoRuntimeConfig): DeviceInfoInput {

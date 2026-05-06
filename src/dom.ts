@@ -59,6 +59,39 @@ export function setBusy(container: HTMLElement, busy: boolean) {
   container.classList.toggle("is-busy", busy);
 }
 
+export function scrollIntoViewCompat(
+  element: Element,
+  options: ScrollIntoViewOptions = { behavior: "auto", block: "nearest", inline: "nearest" }
+) {
+  try {
+    element.scrollIntoView(options);
+  } catch {
+    element.scrollIntoView();
+  }
+}
+
+export function scrollToCompat(
+  element: Element & { scrollTo?: (options: ScrollToOptions) => void; scrollLeft: number; scrollTop: number },
+  options: ScrollToOptions
+) {
+  try {
+    if (element.scrollTo) {
+      element.scrollTo(options);
+      return;
+    }
+  } catch {
+    // Fall through to direct property assignment for older TV engines.
+  }
+
+  if (typeof options.left === "number") {
+    element.scrollLeft = options.left;
+  }
+
+  if (typeof options.top === "number") {
+    element.scrollTop = options.top;
+  }
+}
+
 export function formatRuntime(minutes: number | string | undefined) {
   const value = Number(minutes);
   if (!Number.isFinite(value) || value <= 0) {

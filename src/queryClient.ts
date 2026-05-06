@@ -34,6 +34,7 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       gcTime: 30 * 60_000,
+      experimental_prefetchInRender: true,
       refetchOnWindowFocus: false,
       retry(failureCount, error) {
         if (error instanceof AuthRequiredError) {

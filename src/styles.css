@@ -15,6 +15,7 @@
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   color-scheme: dark;
   font-family: "Noto Sans", Arial, sans-serif;
+  font-size: 20px;
   font-size: clamp(18px, 0.74vw, 22px);
   -webkit-font-smoothing: antialiased;
   background: var(--bg);
@@ -62,6 +63,14 @@ button:disabled {
 button:focus-visible,
 input:focus-visible,
 [data-focusable]:focus-visible {
+  outline: 4px solid var(--focus);
+  outline-offset: 5px;
+  box-shadow: 0 0 0 5px rgba(229, 9, 20, 0.46);
+}
+
+button:focus,
+input:focus,
+[data-focusable]:focus {
   outline: 4px solid var(--focus);
   outline-offset: 5px;
   box-shadow: 0 0 0 5px rgba(229, 9, 20, 0.46);
@@ -193,6 +202,10 @@ input:focus-visible,
 
 .loader-bar::after {
   position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   inset: 0;
   width: 42%;
   content: "";
@@ -218,6 +231,10 @@ input:focus-visible,
 .exit-confirm-backdrop {
   position: fixed;
   z-index: 90;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   inset: 0;
   display: grid;
   place-items: center;
@@ -411,6 +428,10 @@ input:focus-visible,
 
 .hero-art::after {
   position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   inset: 0;
   content: "";
   background: linear-gradient(90deg, #050505 0%, transparent 13%, transparent 84%, #050505 100%);
@@ -445,6 +466,10 @@ input:focus-visible,
 
 .hero-scrim {
   position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   inset: 0;
   z-index: 1;
   pointer-events: none;
@@ -594,6 +619,10 @@ input:focus-visible,
 .poster-image,
 .poster-image img {
   position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   inset: 0;
   width: 100%;
   height: 100%;
@@ -648,6 +677,10 @@ input:focus-visible,
 
 .poster-gradient {
   position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   inset: 0;
   background:
     linear-gradient(180deg, transparent 34%, rgba(0, 0, 0, 0.24) 62%, rgba(0, 0, 0, 0.92) 100%),
@@ -1572,6 +1605,10 @@ input:focus-visible,
 .player-shell {
   position: fixed;
   z-index: 100;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   inset: 0;
   overflow: hidden;
   background: #000;
@@ -2128,6 +2165,8 @@ input:focus-visible,
 
 .is-busy::after {
   position: absolute;
+  top: 50%;
+  left: 50%;
   inset: 50% auto auto 50%;
   width: 1.1rem;
   height: 1.1rem;
@@ -2176,6 +2215,296 @@ input:focus-visible,
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@supports not (width: min(1px, 1px)) {
+  .system-panel,
+  .auth-panel {
+    width: 48rem;
+    max-width: 88vw;
+  }
+
+  .exit-confirm-dialog {
+    width: 36rem;
+    max-width: 88vw;
+  }
+
+  .hero-fallback-poster {
+    width: 19rem;
+    max-width: 21vw;
+  }
+
+  .hero-content {
+    width: 54rem;
+    max-width: 72vw;
+  }
+
+  .hero-copy,
+  .detail-copy p,
+  .browse-hero p,
+  .load-more-card,
+  .settings-hero h1,
+  .settings-hero p {
+    max-width: 100%;
+  }
+
+  .search-hero {
+    width: 82rem;
+    max-width: 100%;
+  }
+
+  .browse-hero {
+    width: 86rem;
+    max-width: 100%;
+  }
+
+  .history-hero {
+    width: 78rem;
+    max-width: 100%;
+  }
+
+  .settings-hero,
+  .device-info-panel,
+  .device-settings-list {
+    width: 74rem;
+    max-width: 100%;
+  }
+
+  .settings-panel {
+    width: 33rem;
+    max-width: 36vw;
+  }
+}
+
+@supports not (aspect-ratio: 1 / 1) {
+  .hero-fallback-poster {
+    height: 28.5rem;
+  }
+
+  .detail-poster {
+    height: 27rem;
+  }
+}
+
+@supports not (bottom: max(1px, 2px)) {
+  .player-shell:not(.controls-hidden) .subtitle-overlay {
+    bottom: 34%;
+  }
+}
+
+@supports not (gap: 1rem) {
+  .top-nav > * + * {
+    margin-left: 0.35rem;
+  }
+
+  .search-box > * + *,
+  .search-page-form > * + *,
+  .exit-confirm-actions > * + *,
+  .hero-actions > * + *,
+  .badge-row > * + *,
+  .control-row > * + *,
+  .error-action-row > * + *,
+  .player-episode-drawer-heading > * + *,
+  .device-list-options > * + *,
+  .settings-results-heading > * + *,
+  .search-results-heading > * + *,
+  .shelf-heading > * + * {
+    margin-left: 0.8rem;
+  }
+
+  .filter-group > div > * + *,
+  .recent-searches > * + *,
+  .player-episode-strip > * + * {
+    margin-left: 0.65rem;
+  }
+}
+
+@supports not (display: grid) {
+  .center-screen,
+  .exit-confirm-backdrop {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .top-bar {
+    display: flex;
+    align-items: center;
+  }
+
+  .top-bar > * {
+    margin-right: 1.2rem;
+  }
+
+  .top-bar > *:last-child {
+    margin-right: 0;
+  }
+
+  .top-bar-spacer {
+    flex: 1 1 auto;
+  }
+
+  .rail,
+  .episode-rail,
+  .search-grid,
+  .history-grid {
+    display: flex;
+    flex-wrap: nowrap;
+  }
+
+  .search-grid,
+  .history-grid {
+    flex-wrap: wrap;
+  }
+
+  .rail > *,
+  .episode-rail > *,
+  .player-episode-strip > * {
+    margin-right: 1rem;
+  }
+
+  .search-result-card {
+    display: flex;
+    flex: 1 1 26rem;
+    margin: 0 0.85rem 0.85rem 0;
+  }
+
+  .search-result-poster {
+    flex: 0 0 6.4rem;
+    margin-right: 0.86rem;
+  }
+
+  .search-result-copy,
+  .history-card-copy,
+  .device-settings-list,
+  .episode-card,
+  .player-episode-card {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .detail-layout {
+    display: flex;
+    align-items: flex-end;
+  }
+
+  .detail-poster {
+    flex: 0 0 18rem;
+    margin-right: 2.4rem;
+  }
+
+  .detail-copy {
+    flex: 1 1 48rem;
+  }
+
+  .search-hero {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .search-prompt {
+    flex: 1 1 17rem;
+    margin-right: 1.3rem;
+  }
+
+  .search-page-form {
+    flex: 1 1 28rem;
+  }
+
+  .recent-searches,
+  .browse-filters {
+    flex: 1 1 100%;
+  }
+
+  .filter-group {
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .filter-group > span {
+    flex: 0 0 5rem;
+    margin-right: 0.6rem;
+  }
+
+  .device-info-panel,
+  .device-setting-row,
+  .history-card,
+  .history-card-main,
+  .option-row,
+  .track-button {
+    display: flex;
+    align-items: center;
+  }
+
+  .device-info-panel {
+    flex-wrap: wrap;
+  }
+
+  .device-info-panel > * {
+    flex: 1 1 10rem;
+    margin-right: 0.9rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .device-info-panel > :first-child {
+    flex-basis: 16rem;
+  }
+
+  .device-setting-row {
+    justify-content: space-between;
+  }
+
+  .history-card {
+    flex: 1 1 25rem;
+    margin: 0 0.72rem 0.72rem 0;
+  }
+
+  .history-card-main {
+    flex: 1 1 auto;
+    margin-right: 0.55rem;
+  }
+
+  .history-card-poster {
+    flex: 0 0 4.8rem;
+    margin-right: 0.8rem;
+  }
+
+  .track-button svg {
+    margin-right: 0.58rem;
+  }
+
+  .track-button {
+    flex-wrap: wrap;
+  }
+
+  .track-button span,
+  .track-button strong {
+    display: block;
+  }
+
+  .option-row {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .option-label {
+    flex: 1 1 auto;
+    margin-right: 0.8rem;
+  }
+
+  .option-selected {
+    flex: 1 1 100%;
+  }
+
+  .icon-button,
+  .brand-mark,
+  .load-more-card,
+  .player-feedback,
+  .device-list-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 

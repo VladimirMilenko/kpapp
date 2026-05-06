@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
-import { Navigate, RouterProvider, createMemoryRouter, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PlayerRouteState, Section } from "./appTypes";
 import { focusFirst } from "./dom";
 import { useGlobalNavigation } from "./hooks/useGlobalNavigation";
 import { AuthRequiredError, KinoApi } from "./kinoApi";
+import { MemoryRouterProvider, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "./memoryRouter";
 import {
   backdropOf,
   episodeNumber,
@@ -71,11 +71,6 @@ const RuntimeContext = createContext<RuntimeContextValue | null>(null);
 export function App({ config }: { config: KinoRuntimeConfig }) {
   const apiRef = useRef<KinoApi | null>(null);
   const authRunRef = useRef(0);
-  const lastHomeBackAtRef = useRef(0);
-  const exitHintTimerRef = useRef<number | undefined>(undefined);
-  const exitDialogRef = useRef<HTMLDivElement | null>(null);
-  const [showExitHint, setShowExitHint] = useState(false);
-  const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   if (!apiRef.current) {
     apiRef.current = new KinoApi(config);
@@ -83,31 +78,28 @@ export function App({ config }: { config: KinoRuntimeConfig }) {
 
   const api = apiRef.current;
   const context = useMemo(() => ({ api, config, authRunRef }), [api, config]);
-  const initialEntry = !api.configured ? "/config" : api.authenticated ? "/home" : "/auth";
-  const router = useMemo(
-    () =>
-      createMemoryRouter(
-        [
-          { path: "/", element: <Navigate to={initialEntry} replace /> },
-          { path: "/config", element: <MissingConfig /> },
-          { path: "/auth", element: <AuthRoute /> },
-          { path: "/pair", element: <PairRoute /> },
-          { path: "/home", element: <HomeRoute /> },
-          { path: "/search", element: <SearchRoute /> },
-          { path: "/browse", element: <BrowseRoute /> },
-          { path: "/history", element: <HistoryRoute /> },
-          { path: "/settings", element: <SettingsRoute /> },
-          { path: "/detail/:id", element: <DetailRoute /> },
-          { path: "/player", element: <PlayerRoute /> },
-          { path: "*", element: <Navigate to={initialEntry} replace /> }
-        ],
-        { initialEntries: [initialEntry] }
-      ),
-    [initialEntry]
+  const initialEntry = routeFallbackPath(api);
+
+  return (
+    <RuntimeContext.Provider value={context}>
+      <MemoryRouterProvider initialEntry={initialEntry}>
+        <AppShell />
+      </MemoryRouterProvider>
+    </RuntimeContext.Provider>
   );
+}
+
+function AppShell() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const lastHomeBackAtRef = useRef(0);
+  const exitHintTimerRef = useRef<number | undefined>(undefined);
+  const exitDialogRef = useRef<HTMLDivElement | null>(null);
+  const [showExitHint, setShowExitHint] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   useGlobalNavigation(() => {
-    const path = router.state.location.pathname;
+    const path = location.pathname;
 
     if (showExitConfirm) {
       setShowExitConfirm(false);
@@ -142,11 +134,11 @@ export function App({ config }: { config: KinoRuntimeConfig }) {
     }
 
     if (path === "/pair") {
-      void router.navigate("/auth");
+      navigate("/auth");
       return;
     }
 
-    void router.navigate(-1);
+    navigate(-1);
   });
 
   useEffect(() => {
@@ -175,8 +167,8 @@ export function App({ config }: { config: KinoRuntimeConfig }) {
   }, []);
 
   return (
-    <RuntimeContext.Provider value={context}>
-      <RouterProvider router={router} />
+    <>
+      <AppRouteView />
       {showExitHint && !showExitConfirm && <div className="exit-hint">Press Back again to close Kino.pub</div>}
       {showExitConfirm && (
         <ExitConfirmDialog
@@ -188,8 +180,64 @@ export function App({ config }: { config: KinoRuntimeConfig }) {
           onExit={() => exitApp()}
         />
       )}
-    </RuntimeContext.Provider>
+    </>
   );
+}
+
+function AppRouteView() {
+  const { api } = useRuntime();
+  const { pathname } = useLocation();
+  const fallback = routeFallbackPath(api);
+
+  if (pathname === "/") {
+    return <Navigate to={fallback} replace />;
+  }
+
+  if (pathname === "/config") {
+    return <MissingConfig />;
+  }
+
+  if (pathname === "/auth") {
+    return <AuthRoute />;
+  }
+
+  if (pathname === "/pair") {
+    return <PairRoute />;
+  }
+
+  if (pathname === "/home") {
+    return <HomeRoute />;
+  }
+
+  if (pathname === "/search") {
+    return <SearchRoute />;
+  }
+
+  if (pathname === "/browse") {
+    return <BrowseRoute />;
+  }
+
+  if (pathname === "/history") {
+    return <HistoryRoute />;
+  }
+
+  if (pathname === "/settings") {
+    return <SettingsRoute />;
+  }
+
+  if (/^\/detail\/[^/]+$/.test(pathname)) {
+    return <DetailRoute />;
+  }
+
+  if (pathname === "/player") {
+    return <PlayerRoute />;
+  }
+
+  return <Navigate to={fallback} replace />;
+}
+
+function routeFallbackPath(api: KinoApi) {
+  return !api.configured ? "/config" : api.authenticated ? "/home" : "/auth";
 }
 
 function ExitConfirmDialog({

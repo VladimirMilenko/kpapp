@@ -1,6 +1,6 @@
 # Kino.pub LG TV
 
-Bun + Vite webOS app for Kino.pub with a memory-routed React UI, TanStack Query server-state caching, a lazy-loaded `hls.js` playback core, TV remote navigation, selectable quality, audio, and subtitles.
+Bun + Vite webOS app for Kino.pub with a memory-routed React UI, TanStack Query server-state caching, an `hls.js` playback core, TV remote navigation, selectable quality, audio, and subtitles.
 
 ## Setup
 
@@ -35,6 +35,8 @@ bun run build
 ```
 
 `bun run build` runs `vite build`, then `scripts/webos.ts` writes `dist/config.js` and copies `appinfo.json` for packaging.
+
+The packaged build is prepared for webOS TV 4.x / Chromium 53 by emitting a single classic script bundle, loading `legacy-polyfills.js` before the app, and rewriting Vite's generated module script tags during the webOS asset step.
 
 Package for LG webOS after installing LG webOS CLI tools:
 

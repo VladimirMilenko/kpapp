@@ -23,22 +23,17 @@ export default defineConfig({
     emptyOutDir: true,
     assetsDir: "assets",
     sourcemap: false,
-    target: "chrome120",
+    target: "chrome53",
+    cssTarget: "chrome53",
     modulePreload: false,
     chunkSizeWarningLimit: 650,
     rollupOptions: {
       output: {
-        manualChunks(id) {
-          if (id.includes("node_modules/hls.js")) {
-            return "hls";
-          }
-
-          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom") || id.includes("node_modules/scheduler")) {
-            return "react";
-          }
-
-          return undefined;
-        }
+        entryFileNames: "assets/[name].js",
+        assetFileNames: "assets/[name][extname]",
+        format: "iife",
+        inlineDynamicImports: true,
+        name: "KinoPubTvApp"
       }
     }
   }

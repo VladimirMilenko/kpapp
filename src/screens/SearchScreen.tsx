@@ -3,6 +3,7 @@ import type { FormEvent, KeyboardEvent, RefObject } from "react";
 import { PosterImage } from "../components/PosterImage";
 import { TopBar } from "../components/TopBar";
 import { useImagePreload } from "../hooks/useImagePreload";
+import { scrollIntoViewCompat } from "../dom";
 import { cardPosterCandidatesOf, cardPosterOf, metaLine, synopsisOf, titleOf } from "../media";
 import { readSearchHistory } from "../searchHistory";
 import type { KinoItem } from "../types";
@@ -75,6 +76,10 @@ export function SearchScreen({
       return;
     }
 
+    if (typeof IntersectionObserver === "undefined") {
+      return;
+    }
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry?.isIntersecting) {
@@ -105,7 +110,7 @@ export function SearchScreen({
     event.preventDefault();
     event.stopPropagation();
     target.focus();
-    target.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    scrollIntoViewCompat(target, { behavior: "smooth", block: "nearest", inline: "nearest" });
   }
 
   return (

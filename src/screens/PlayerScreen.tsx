@@ -3,7 +3,7 @@ import type { PointerEvent } from "react";
 import { ArrowLeft, AudioLines, Captions, FastForward, Palette, Pause, Play, Rewind, SkipBack, SkipForward, SlidersHorizontal } from "lucide-react";
 import { SettingsPanel } from "../components/SettingsPanel";
 import type { SettingsPanelKind } from "../components/SettingsPanel";
-import { clamp, formatClock, getFocusable } from "../dom";
+import { clamp, formatClock, getFocusable, scrollToCompat } from "../dom";
 import { TvPlayer } from "../player";
 import {
   changeSubtitleAppearance,
@@ -402,7 +402,7 @@ export function PlayerScreen({
     const stripRect = strip.getBoundingClientRect();
     const targetRect = target.getBoundingClientRect();
     const targetCenter = targetRect.left - stripRect.left + strip.scrollLeft + targetRect.width / 2;
-    strip.scrollTo({ left: Math.max(0, targetCenter - strip.clientWidth / 2), behavior: "auto" });
+    scrollToCompat(strip, { left: Math.max(0, targetCenter - strip.clientWidth / 2), behavior: "auto" });
   }
 
   function hasEpisodeStrip() {

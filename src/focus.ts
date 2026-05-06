@@ -1,4 +1,4 @@
-import { getFocusable } from "./dom";
+import { getFocusable, scrollIntoViewCompat } from "./dom";
 
 type Direction = "left" | "right" | "up" | "down";
 
@@ -62,7 +62,7 @@ export function handleSpatialNavigation(event: KeyboardEvent, container: ParentN
 
   event.preventDefault();
   best.node.focus();
-  best.node.scrollIntoView({ behavior: "auto", block: "nearest", inline: "nearest" });
+  scrollIntoViewCompat(best.node);
   return true;
 }
 

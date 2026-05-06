@@ -1,10 +1,10 @@
 import { activeCue, loadSubtitle, type SubtitleCue } from "./subtitles";
 import { readTrackPreferences, sameLanguage, saveAudioPreference, saveSubtitlePreference } from "./trackPreferences";
 import type { PlaybackSession, PlayerSnapshot } from "./types";
-import type Hls from "hls.js";
+import Hls from "hls.js";
 
 type PlayerEventHandler = (snapshot: PlayerSnapshot) => void;
-type HlsConstructor = typeof import("hls.js").default;
+type HlsConstructor = typeof Hls;
 type TrackOption = { id: string; label: string; enabled: boolean; lang?: string; forced?: boolean };
 type VideoFrameCallbackVideo = HTMLVideoElement & {
   requestVideoFrameCallback?: (callback: () => void) => number;
@@ -477,7 +477,7 @@ export class TvPlayer {
 
   private async loadHls() {
     if (!this.HlsClass) {
-      this.HlsClass = (await import("hls.js")).default;
+      this.HlsClass = Hls;
     }
 
     return this.HlsClass;

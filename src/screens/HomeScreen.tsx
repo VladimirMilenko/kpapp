@@ -6,6 +6,7 @@ import type { ShelfFocusContext } from "../components/Shelf";
 import { TopBar } from "../components/TopBar";
 import { useAutoFocus } from "../hooks/useAutoFocus";
 import { useImagePreload } from "../hooks/useImagePreload";
+import { scrollToCompat } from "../dom";
 import { posterOf, railPosterOf } from "../media";
 import type { KinoItem } from "../types";
 
@@ -53,7 +54,9 @@ export function HomeScreen({
   useImagePreload([posterOf(firstItem ?? {}), ...visibleItems.map(railPosterOf)], 14);
 
   function scrollToHero() {
-    mainRef.current?.scrollTo({ top: 0, behavior: "auto" });
+    if (mainRef.current) {
+      scrollToCompat(mainRef.current, { top: 0, behavior: "auto" });
+    }
   }
 
   return (

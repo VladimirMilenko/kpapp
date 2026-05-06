@@ -52,6 +52,10 @@ export function BrowseScreen({
       return;
     }
 
+    if (typeof IntersectionObserver === "undefined") {
+      return;
+    }
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry?.isIntersecting) {
