@@ -25,6 +25,8 @@ type PlayerFeedback = {
 
 type PlayerCommand = "back" | "playpause" | "rewind" | "forward" | "left" | "right" | "up" | "down" | "enter";
 const AUTO_ADVANCE_REMAINING_SECONDS = 1.5;
+const SURFACE_DOUBLE_TAP_MS = 340;
+const SURFACE_DOUBLE_TAP_DISTANCE = 90;
 
 type FullscreenDocument = Document & {
   webkitFullscreenElement?: Element | null;
@@ -70,6 +72,7 @@ export function PlayerScreen({
   const endedHandledRef = useRef(false);
   const seekBurstRef = useRef({ direction: 0, stepIndex: 0, at: 0 });
   const timelineDragRef = useRef(false);
+  const surfaceTapRef = useRef<{ at: number; x: number; y: number; direction: -1 | 1 } | null>(null);
   const [snapshot, setSnapshot] = useState<PlayerSnapshot | null>(null);
   const [settingsPanel, setSettingsPanel] = useState<SettingsPanelKind | null>(null);
   const [controlsHidden, setControlsHidden] = useState(false);
@@ -249,6 +252,45 @@ export function PlayerScreen({
         setControlsHidden(true);
       }
     }, 4500);
+  }
+
+  function handleSurfacePointerDown(event: PointerEvent<HTMLDivElement>) {
+    if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) {
+      return;
+    }
+
+    showControls();
+  }
+
+  function handleSurfacePointerUp(event: PointerEvent<HTMLDivElement>) {
+    if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) {
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const direction: -1 | 1 = event.clientX - rect.left < rect.width / 2 ? -1 : 1;
+    const now = Date.now();
+    const last = surfaceTapRef.current;
+    const isDoubleTap =
+      last !== null &&
+      last.direction === direction &&
+      now - last.at <= SURFACE_DOUBLE_TAP_MS &&
+      Math.abs(event.clientX - last.x) <= SURFACE_DOUBLE_TAP_DISTANCE &&
+      Math.abs(event.clientY - last.y) <= SURFACE_DOUBLE_TAP_DISTANCE;
+
+    showControls();
+
+    if (isDoubleTap) {
+      surfaceTapRef.current = null;
+      seekByWithFeedback(direction * 10);
+      return;
+    }
+
+    surfaceTapRef.current = { at: now, x: event.clientX, y: event.clientY, direction };
+  }
+
+  function clearSurfaceTap() {
+    surfaceTapRef.current = null;
   }
 
   function hideControls() {
@@ -592,6 +634,12 @@ export function PlayerScreen({
       className={`player-shell${controlsHidden ? " controls-hidden" : ""}${episodeDrawerOpen ? " episodes-open" : ""}`}
     >
       <video ref={videoRef} className="player-video" playsInline preload="auto" poster={session.poster} />
+      <div
+        className="player-surface"
+        onPointerDown={handleSurfacePointerDown}
+        onPointerUp={handleSurfacePointerUp}
+        onPointerCancel={clearSurfaceTap}
+      />
       <div
         ref={subtitleRef}
         className={`subtitle-overlay ${subtitleBackgroundClass(subtitleAppearance)}`}

@@ -1698,8 +1698,17 @@ input:focus-visible,
   background: #000;
 }
 
+.player-surface {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 .subtitle-overlay {
   position: absolute;
+  z-index: 2;
   right: 12%;
   bottom: var(--subtitle-bottom, 18%);
   left: 12%;
@@ -1709,6 +1718,7 @@ input:focus-visible,
   font-size: var(--subtitle-font-size, 2.75rem);
   font-weight: 800;
   line-height: 1.24;
+  pointer-events: none;
   text-align: center;
   text-shadow:
     0 3px 5px rgba(0, 0, 0, 0.95),
@@ -1738,6 +1748,7 @@ input:focus-visible,
 
 .player-loading {
   position: absolute;
+  z-index: 3;
   top: 50%;
   left: 50%;
   width: 4rem;
@@ -1751,6 +1762,7 @@ input:focus-visible,
 
 .player-controls {
   position: absolute;
+  z-index: 4;
   right: 0;
   bottom: 0;
   left: 0;
@@ -2069,7 +2081,7 @@ input:focus-visible,
 
 .player-feedback {
   position: absolute;
-  z-index: 4;
+  z-index: 7;
   top: 50%;
   left: 50%;
   display: grid;
