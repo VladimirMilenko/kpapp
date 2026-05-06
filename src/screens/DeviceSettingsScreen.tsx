@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DENSITY_OPTIONS, THEME_OPTIONS, type AppearanceSettings, type AppDensity, type AppTheme } from "../appearance";
 import { TopBar } from "../components/TopBar";
 import { useAutoFocus } from "../hooks/useAutoFocus";
 import type { DeviceInfo, DeviceInfoInput, DeviceSetting, DeviceSettingListItem, DeviceSettings, KinoRuntimeConfig } from "../types";
@@ -41,9 +42,11 @@ export function DeviceSettingsScreen({
   config,
   device,
   settings,
+  appearance,
   loading,
   error,
   savingKey,
+  onChangeAppearance,
   onChangeSetting,
   onSaveDeviceInfo,
   onSearch,
@@ -56,9 +59,11 @@ export function DeviceSettingsScreen({
   config: KinoRuntimeConfig;
   device: DeviceInfo | undefined;
   settings: DeviceSettings | undefined;
+  appearance: AppearanceSettings;
   loading: boolean;
   error: string | undefined;
   savingKey: string | undefined;
+  onChangeAppearance: (value: AppearanceSettings) => void;
   onChangeSetting: (key: string, value: string | number | boolean) => void;
   onSaveDeviceInfo: (value: DeviceInfoInput) => void;
   onSearch: (query: string) => void;
@@ -91,8 +96,27 @@ export function DeviceSettingsScreen({
       />
       <section className="settings-hero">
         <div className="kicker">Kino.pub</div>
-        <h1>Device settings</h1>
-        <p>These values are sent to Kino.pub and control SSL, codecs, quality capabilities, streaming type, and server region for this TV.</p>
+        <h1>Settings</h1>
+        <p>Adjust browser appearance and Kino.pub playback capabilities for this device.</p>
+      </section>
+
+      <section className="appearance-panel">
+        <div>
+          <h2>Appearance</h2>
+          <p>Saved only on this browser.</p>
+        </div>
+        <AppearanceGroup
+          label="Theme"
+          options={THEME_OPTIONS}
+          selected={appearance.theme}
+          onSelect={(theme) => onChangeAppearance({ ...appearance, theme })}
+        />
+        <AppearanceGroup
+          label="Density"
+          options={DENSITY_OPTIONS}
+          selected={appearance.density}
+          onSelect={(density) => onChangeAppearance({ ...appearance, density })}
+        />
       </section>
 
       <section className="device-info-panel">
@@ -172,6 +196,39 @@ export function DeviceSettingsScreen({
           )}
       </section>
     </main>
+  );
+}
+
+function AppearanceGroup<T extends AppTheme | AppDensity>({
+  label,
+  options,
+  selected,
+  onSelect
+}: {
+  label: string;
+  options: Array<{ id: T; label: string; description: string }>;
+  selected: T;
+  onSelect: (value: T) => void;
+}) {
+  return (
+    <div className="appearance-group">
+      <span>{label}</span>
+      <div className="appearance-options">
+        {options.map((option) => (
+          <button
+            key={option.id}
+            className={`appearance-option${option.id === selected ? " is-selected" : ""}`}
+            type="button"
+            data-focusable
+            aria-pressed={option.id === selected}
+            onClick={() => onSelect(option.id)}
+          >
+            <strong>{option.label}</strong>
+            <small>{option.description}</small>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

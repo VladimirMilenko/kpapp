@@ -36,9 +36,9 @@ bun run build
 
 `bun run build` runs `vite build`, then `scripts/webos.ts` writes `dist/config.js` and copies `appinfo.json` for packaging.
 
-## GitHub Pages
+## Web App
 
-The repository includes a GitHub Actions workflow that builds `dist/` and deploys it to GitHub Pages when changes land on `main`. It can also be run manually from the Actions tab.
+The `web` branch is the browser-first app. It includes a GitHub Actions workflow that builds `dist/` and deploys it to GitHub Pages when changes land on `web`. It can also be run manually from the Actions tab.
 
 For the first deployment, open the repository's Pages settings and set the source to GitHub Actions. After the workflow completes, the app will be available at the Pages URL, for example:
 

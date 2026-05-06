@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { Navigate, RouterProvider, createMemoryRouter, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { applyAppearanceSettings, readAppearanceSettings, saveAppearanceSettings, type AppearanceSettings } from "./appearance";
 import type { PlayerRouteState, Section } from "./appTypes";
 import { focusFirst } from "./dom";
 import { useGlobalNavigation } from "./hooks/useGlobalNavigation";
@@ -63,6 +64,8 @@ const EXIT_BACK_WINDOW_MS = 1800;
 interface RuntimeContextValue {
   api: KinoApi;
   config: KinoRuntimeConfig;
+  appearance: AppearanceSettings;
+  setAppearance: (value: AppearanceSettings) => void;
   authRunRef: MutableRefObject<number>;
 }
 
@@ -74,6 +77,7 @@ export function App({ config }: { config: KinoRuntimeConfig }) {
   const lastHomeBackAtRef = useRef(0);
   const exitHintTimerRef = useRef<number | undefined>(undefined);
   const exitDialogRef = useRef<HTMLDivElement | null>(null);
+  const [appearance, setAppearanceState] = useState(readAppearanceSettings);
   const [showExitHint, setShowExitHint] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
@@ -82,7 +86,11 @@ export function App({ config }: { config: KinoRuntimeConfig }) {
   }
 
   const api = apiRef.current;
-  const context = useMemo(() => ({ api, config, authRunRef }), [api, config]);
+  const setAppearance = useCallback((value: AppearanceSettings) => {
+    setAppearanceState(value);
+    saveAppearanceSettings(value);
+  }, []);
+  const context = useMemo(() => ({ api, config, appearance, setAppearance, authRunRef }), [api, appearance, config, setAppearance]);
   const initialEntry = !api.configured ? "/config" : api.authenticated ? "/home" : "/auth";
   const router = useMemo(
     () =>
@@ -173,6 +181,10 @@ export function App({ config }: { config: KinoRuntimeConfig }) {
       // webOS exposes this in packaged apps only.
     }
   }, []);
+
+  useEffect(() => {
+    applyAppearanceSettings(appearance);
+  }, [appearance]);
 
   return (
     <RuntimeContext.Provider value={context}>
@@ -477,7 +489,7 @@ function HistoryRoute() {
 }
 
 function SettingsRoute() {
-  const { api, config } = useRuntime();
+  const { api, config, appearance, setAppearance } = useRuntime();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [savingKey, setSavingKey] = useState<string>();
@@ -534,6 +546,7 @@ function SettingsRoute() {
       config={config}
       device={deviceInfoQuery.data}
       settings={query.data}
+      appearance={appearance}
       loading={query.isPending}
       error={
         query.error
@@ -547,6 +560,7 @@ function SettingsRoute() {
                 : undefined
       }
       savingKey={savingKey}
+      onChangeAppearance={setAppearance}
       onChangeSetting={(key, value) => settingMutation.mutate({ key, value })}
       onSaveDeviceInfo={(value) => deviceInfoMutation.mutate(value)}
       onSearch={(value) => {

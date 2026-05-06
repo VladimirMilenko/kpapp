@@ -1,0 +1,22 @@
+{
+  "name": "Kino.pub",
+  "short_name": "Kino.pub",
+  "description": "Kino.pub browser app",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "icons": [
+    {
+      "src": "./assets/icon-80.png",
+      "sizes": "80x80",
+      "type": "image/png"
+    },
+    {
+      "src": "./assets/icon-130.png",
+      "sizes": "130x130",
+      "type": "image/png"
+    }
+  ]
+}

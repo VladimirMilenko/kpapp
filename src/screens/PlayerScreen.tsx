@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent } from "react";
-import { ArrowLeft, AudioLines, Captions, FastForward, Palette, Pause, Play, Rewind, SkipBack, SkipForward, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, AudioLines, Captions, FastForward, Maximize2, Minimize2, Palette, Pause, Play, Rewind, SkipBack, SkipForward, SlidersHorizontal } from "lucide-react";
 import { SettingsPanel } from "../components/SettingsPanel";
 import type { SettingsPanelKind } from "../components/SettingsPanel";
 import { clamp, formatClock, getFocusable } from "../dom";
@@ -25,6 +25,16 @@ type PlayerFeedback = {
 
 type PlayerCommand = "back" | "playpause" | "rewind" | "forward" | "left" | "right" | "up" | "down" | "enter";
 const AUTO_ADVANCE_REMAINING_SECONDS = 1.5;
+
+type FullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null;
+  webkitFullscreenEnabled?: boolean;
+  webkitExitFullscreen?: () => Promise<void> | void;
+};
+
+type FullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+};
 
 export function PlayerScreen({
   session,
@@ -65,6 +75,8 @@ export function PlayerScreen({
   const [controlsHidden, setControlsHidden] = useState(false);
   const [episodeDrawerOpen, setEpisodeDrawerOpen] = useState(false);
   const [feedback, setFeedback] = useState<PlayerFeedback | null>(null);
+  const [fullscreenSupported, setFullscreenSupported] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const [subtitleAppearance, setSubtitleAppearance] = useState(readSubtitleAppearance);
 
   useEffect(() => {
@@ -83,6 +95,27 @@ export function PlayerScreen({
   useEffect(() => {
     episodeDrawerOpenRef.current = episodeDrawerOpen;
   }, [episodeDrawerOpen]);
+
+  useEffect(() => {
+    const fullscreenDocument = document as FullscreenDocument;
+    const root = shellRef.current as FullscreenElement | null;
+    const supported = Boolean(document.fullscreenEnabled || fullscreenDocument.webkitFullscreenEnabled || root?.requestFullscreen || root?.webkitRequestFullscreen);
+
+    setFullscreenSupported(supported);
+
+    const updateFullscreen = () => {
+      const element = document.fullscreenElement || fullscreenDocument.webkitFullscreenElement;
+      setFullscreen(Boolean(element && shellRef.current?.contains(element)));
+    };
+
+    updateFullscreen();
+    document.addEventListener("fullscreenchange", updateFullscreen);
+    document.addEventListener("webkitfullscreenchange", updateFullscreen);
+    return () => {
+      document.removeEventListener("fullscreenchange", updateFullscreen);
+      document.removeEventListener("webkitfullscreenchange", updateFullscreen);
+    };
+  }, []);
 
   useEffect(() => {
     if (!settingsPanel) {
@@ -329,6 +362,18 @@ export function PlayerScreen({
     const paused = latestSnapshotRef.current?.paused ?? true;
     playerRef.current?.togglePlay();
     showFeedback(paused ? "Play" : "Pause");
+  }
+
+  async function toggleFullscreen() {
+    const fullscreenDocument = document as FullscreenDocument;
+    const root = shellRef.current as FullscreenElement | null;
+
+    if (document.fullscreenElement || fullscreenDocument.webkitFullscreenElement) {
+      await (document.exitFullscreen?.() ?? fullscreenDocument.webkitExitFullscreen?.());
+      return;
+    }
+
+    await (root?.requestFullscreen?.() ?? root?.webkitRequestFullscreen?.());
   }
 
   function selectEpisode(episode: PlayerEpisodeCard | undefined) {
@@ -631,6 +676,11 @@ export function PlayerScreen({
           <button className="round-button icon-button skip-button" type="button" aria-label="Forward 10 seconds" title="Forward 10 seconds" data-focusable data-player-focus-zone="controls" onClick={() => seekByWithFeedback(10)}>
             <FastForward aria-hidden="true" />
           </button>
+          {fullscreenSupported && (
+            <button className="round-button icon-button" type="button" aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} title={fullscreen ? "Exit fullscreen" : "Fullscreen"} data-focusable data-player-focus-zone="controls" onClick={() => void toggleFullscreen()}>
+              {fullscreen ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
+            </button>
+          )}
           {hasEpisodes && (
             <button
               className="round-button icon-button episode-step-button"
