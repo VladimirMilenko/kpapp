@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { normalizeImageUrls } from "../imageFallback";
 import { useImageCandidate } from "../hooks/useImageCandidate";
 
@@ -12,7 +13,9 @@ export function PosterImage({
   alt?: string;
   loading?: "eager" | "lazy";
 }) {
-  const candidates = normalizeImageUrls(urls).map((url) => ({ url }));
+  const key = urls.join("\n");
+  // Keyed on the URL list so useImageCandidate's memo isn't invalidated by a fresh array every render.
+  const candidates = useMemo(() => normalizeImageUrls(urls).map((url) => ({ url })), [key]);
   const image = useImageCandidate(candidates);
 
   return (

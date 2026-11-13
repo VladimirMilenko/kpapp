@@ -113,7 +113,8 @@ function mergeHeroItem(detail: KinoItem | undefined, fallback: KinoItem | undefi
 }
 
 function mergeDisplayItems(items: KinoItem[], detail: KinoItem | undefined) {
-  if (!detail?.id) {
+  if (!detail?.id || !items.some((item) => String(item.id) === String(detail.id))) {
+    // Same array keeps the memoized Shelf from re-rendering when the hero isn't on this rail.
     return items;
   }
 

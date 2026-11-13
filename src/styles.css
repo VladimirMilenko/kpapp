@@ -444,11 +444,21 @@ input:focus-visible,
 }
 
 .hero-art img {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center;
+}
+
+.hero-art img.hero-art-pending {
+  opacity: 0;
+}
+
+.hero-art img.hero-art-entering {
+  animation: fade-in 320ms var(--ease-out) both;
 }
 
 .hero-art::after {
@@ -499,6 +509,7 @@ input:focus-visible,
   position: relative;
   z-index: 3;
   width: min(54rem, 72vw);
+  animation: hero-content-in 260ms var(--ease-out) backwards;
 }
 
 .hero-actions {
@@ -579,6 +590,23 @@ input:focus-visible,
   padding: 0.7rem 0 2.1rem 4.2rem;
 }
 
+/* Entrance only: "backwards" fill leaves no transform behind once it finishes. */
+.home-content > .shelf {
+  animation: page-rise 380ms var(--ease-out) backwards;
+}
+
+.home-content > .shelf:nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.home-content > .shelf:nth-child(n + 3) {
+  animation-delay: 120ms;
+}
+
+.detail-layout {
+  animation: page-rise 380ms var(--ease-out) backwards;
+}
+
 .shelf-heading {
   display: flex;
   gap: 0.8rem;
@@ -630,7 +658,7 @@ input:focus-visible,
   border: 1px solid rgba(247, 241, 232, 0.08);
   border-radius: 6px;
   scroll-snap-align: start;
-  transition: none;
+  transition: transform 160ms var(--ease-out);
 }
 
 .poster-image,
@@ -652,6 +680,7 @@ input:focus-visible,
 
 .poster-card:focus-visible {
   border-color: rgba(255, 255, 255, 0.56);
+  transform: scale(1.04);
 }
 
 .continue-shelf {
@@ -1745,8 +1774,15 @@ input:focus-visible,
   white-space: pre-line;
 }
 
+/* Older TV browsers without CSS max() still keep subtitles above the controls. */
 .player-shell:not(.controls-hidden) .subtitle-overlay {
-  bottom: max(var(--subtitle-bottom, 18%), 34%);
+  bottom: 34%;
+}
+
+@supports (bottom: max(1%, 2%)) {
+  .player-shell:not(.controls-hidden) .subtitle-overlay {
+    bottom: max(var(--subtitle-bottom, 18%), 34%);
+  }
 }
 
 .subtitle-overlay:empty {
@@ -2153,6 +2189,7 @@ input:focus-visible,
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+  animation: panel-in 200ms var(--ease-out) backwards;
 }
 
 .settings-heading {
@@ -2302,13 +2339,35 @@ input:focus-visible,
   }
 }
 
-@keyframes hero-swap {
+@keyframes fade-in {
   from {
-    opacity: 0.86;
+    opacity: 0;
   }
 
   to {
     opacity: 1;
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(2rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
   }
 }
 

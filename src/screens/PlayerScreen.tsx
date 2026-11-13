@@ -23,7 +23,20 @@ type PlayerFeedback = {
   tone: "seek" | "status" | "error";
 };
 
-type PlayerCommand = "back" | "playpause" | "rewind" | "forward" | "left" | "right" | "up" | "down" | "enter";
+type PlayerCommand =
+  | "back"
+  | "playpause"
+  | "play"
+  | "pause"
+  | "rewind"
+  | "forward"
+  | "nextEpisode"
+  | "previousEpisode"
+  | "left"
+  | "right"
+  | "up"
+  | "down"
+  | "enter";
 const AUTO_ADVANCE_REMAINING_SECONDS = 1.5;
 const SURFACE_DOUBLE_TAP_MS = 340;
 const SURFACE_DOUBLE_TAP_DISTANCE = 90;
@@ -206,6 +219,26 @@ export function PlayerScreen({
 
       if (command === "playpause") {
         togglePlayWithFeedback();
+        return;
+      }
+
+      if (command === "play" || command === "pause") {
+        const paused = latestSnapshotRef.current?.paused ?? true;
+        if (command === "play" ? paused : !paused) {
+          if (command === "play") {
+            playerRef.current?.play();
+          } else {
+            playerRef.current?.pause();
+          }
+          showFeedback(command === "play" ? "Play" : "Pause");
+        }
+        return;
+      }
+
+      if (command === "nextEpisode" || command === "previousEpisode") {
+        // Click the rendered button: this handler is registered once, so its closures would see stale episode props.
+        const step = command === "nextEpisode" ? "next" : "previous";
+        shellRef.current?.querySelector<HTMLButtonElement>(`[data-episode-step="${step}"]:not(:disabled)`)?.click();
         return;
       }
 
@@ -410,12 +443,16 @@ export function PlayerScreen({
     const fullscreenDocument = document as FullscreenDocument;
     const root = shellRef.current as FullscreenElement | null;
 
-    if (document.fullscreenElement || fullscreenDocument.webkitFullscreenElement) {
-      await (document.exitFullscreen?.() ?? fullscreenDocument.webkitExitFullscreen?.());
-      return;
-    }
+    try {
+      if (document.fullscreenElement || fullscreenDocument.webkitFullscreenElement) {
+        await (document.exitFullscreen?.() ?? fullscreenDocument.webkitExitFullscreen?.());
+        return;
+      }
 
-    await (root?.requestFullscreen?.() ?? root?.webkitRequestFullscreen?.());
+      await (root?.requestFullscreen?.() ?? root?.webkitRequestFullscreen?.());
+    } catch {
+      // The browser can refuse fullscreen (permissions policy, no user gesture); keep playing inline.
+    }
   }
 
   function selectEpisode(episode: PlayerEpisodeCard | undefined) {
@@ -708,6 +745,7 @@ export function PlayerScreen({
               disabled={!canSelectPreviousEpisode}
               aria-label={previousEpisode ? `Previous episode: ${previousEpisode.title}` : "Previous episode"}
               title="Previous episode"
+              data-episode-step="previous"
               data-focusable={canSelectPreviousEpisode || undefined}
               data-player-focus-zone="controls"
               onClick={() => selectEpisode(previousEpisode)}
@@ -736,6 +774,7 @@ export function PlayerScreen({
               disabled={!canSelectNextEpisode}
               aria-label={nextEpisode ? `Next episode: ${nextEpisode.title}` : "Next episode"}
               title="Next episode"
+              data-episode-step="next"
               data-focusable={canSelectNextEpisode || undefined}
               data-player-focus-zone="controls"
               onClick={() => selectEpisode(nextEpisode)}
@@ -823,12 +862,31 @@ export function PlayerScreen({
 function playerCommandOf(event: KeyboardEvent): PlayerCommand | undefined {
   const keyCode = event.keyCode || event.which;
 
-  if (keyCode === 461 || event.key === "Escape" || event.key === "BrowserBack") {
+  // 413 is the remote's Stop key; stopping leaves the player like Back does.
+  if (keyCode === 461 || keyCode === 413 || event.key === "Escape" || event.key === "BrowserBack" || event.key === "MediaStop") {
     return "back";
   }
 
-  if (keyCode === 415 || keyCode === 19 || event.key === "MediaPlayPause" || event.key === "MediaPlay" || event.key === "MediaPause") {
+  // LG remotes have separate Play (415) and Pause (19) keys; only the combined key toggles.
+  if (keyCode === 415 || event.key === "MediaPlay") {
+    return "play";
+  }
+
+  if (keyCode === 19 || event.key === "MediaPause") {
+    return "pause";
+  }
+
+  if (event.key === "MediaPlayPause") {
     return "playpause";
+  }
+
+  // Track keys, plus CH+/CH- (PageUp/PageDown on webOS), step between episodes.
+  if (event.key === "MediaTrackNext" || event.key === "PageUp") {
+    return "nextEpisode";
+  }
+
+  if (event.key === "MediaTrackPrevious" || event.key === "PageDown") {
+    return "previousEpisode";
   }
 
   if (keyCode === 412 || event.key === "MediaRewind") {

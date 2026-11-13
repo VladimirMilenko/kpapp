@@ -93,7 +93,8 @@ export function SearchScreen({
   }
 
   function handleInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+    // Up falls through to global navigation so it reaches the top menu.
+    if (event.key !== "ArrowDown") {
       return;
     }
 
@@ -105,7 +106,7 @@ export function SearchScreen({
     event.preventDefault();
     event.stopPropagation();
     target.focus();
-    target.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    target.scrollIntoView({ behavior: "auto", block: "nearest", inline: "nearest" });
   }
 
   return (

@@ -1,4 +1,4 @@
-import { activeCue, loadSubtitle, type SubtitleCue } from "./subtitles";
+import { activeCue, cleanCueText, loadSubtitle, type SubtitleCue } from "./subtitles";
 import { readTrackPreferences, sameLanguage, saveAudioPreference, saveSubtitlePreference } from "./trackPreferences";
 import type { PlaybackSession, PlayerSnapshot } from "./types";
 import type Hls from "hls.js";
@@ -26,6 +26,8 @@ export class TvPlayer {
   private currentSourceId = "";
   private externalCues: SubtitleCue[] = [];
   private selectedSubtitleId = "off";
+  private subtitleRequest = 0;
+  private subtitleLoading = false;
   private appliedPreferredAudio = false;
   private appliedPreferredSubtitle = false;
   private fatalNetworkRecoveries = 0;
@@ -91,8 +93,20 @@ export class TvPlayer {
 
   togglePlay() {
     if (this.video.paused) {
-      void this.playWhenReady();
+      this.play();
     } else {
+      this.pause();
+    }
+  }
+
+  play() {
+    if (this.video.paused) {
+      void this.playWhenReady();
+    }
+  }
+
+  pause() {
+    if (!this.video.paused) {
       this.playIntent += 1;
       this.video.pause();
     }
@@ -205,7 +219,12 @@ export class TvPlayer {
   }
 
   async selectSubtitle(id: string, persist = true) {
+    const request = ++this.subtitleRequest;
     this.selectedSubtitleId = id;
+    if (this.subtitleLoading) {
+      this.subtitleLoading = false;
+      this.loading = false;
+    }
     this.externalCues = [];
     this.subtitleOverlay.textContent = "";
 
@@ -223,7 +242,8 @@ export class TvPlayer {
     }
 
     if (id.startsWith("hls:") && this.hls) {
-      this.hls.subtitleDisplay = true;
+      // Keep the native track hidden and render its cues in the styled overlay.
+      this.hls.subtitleDisplay = false;
       this.hls.subtitleTrack = Number(id.slice("hls:".length));
       if (persist) {
         saveSubtitlePreference(this.languageForSubtitleId(id));
@@ -242,18 +262,31 @@ export class TvPlayer {
       saveSubtitlePreference(this.languageForSubtitleId(id));
     }
 
+    this.subtitleLoading = true;
     this.loading = true;
     this.emit();
 
+    let cues: SubtitleCue[] = [];
+    let error = "";
     try {
-      this.externalCues = await loadSubtitle(option.url, option.shift ?? 0);
-    } catch (error) {
-      this.error = error instanceof Error ? error.message : "Unable to load subtitles.";
-    } finally {
-      this.loading = false;
-      this.updateSubtitle();
-      this.emit();
+      cues = await loadSubtitle(option.url, option.shift ?? 0);
+    } catch (loadError) {
+      error = loadError instanceof Error ? loadError.message : "Unable to load subtitles.";
     }
+
+    // A newer selection won while this file was loading; don't stack its cues on top.
+    if (request !== this.subtitleRequest) {
+      return;
+    }
+
+    this.externalCues = cues;
+    if (error) {
+      this.error = error;
+    }
+    this.subtitleLoading = false;
+    this.loading = false;
+    this.updateSubtitle();
+    this.emit();
   }
 
   snapshot() {
@@ -311,6 +344,8 @@ export class TvPlayer {
         startFragPrefetch: true,
         testBandwidth: true
       });
+      // All subtitles render in the styled overlay; a natively shown DEFAULT=YES track would double them up.
+      this.hls.subtitleDisplay = false;
 
       this.hls.on(HlsClass.Events.MEDIA_ATTACHED, () => {
         this.hls?.loadSource(source.url);
@@ -521,6 +556,23 @@ export class TvPlayer {
       this.unsubscribers.push(() => this.video.removeEventListener(eventName, handler));
     }
 
+    const cueChangeHandler = () => this.updateSubtitle();
+    const addTrackHandler = (event: TrackEvent) => {
+      const track = event.track;
+      track?.addEventListener("cuechange", cueChangeHandler);
+      // Native HLS playback can auto-show embedded tracks we don't list; the overlay is the only renderer.
+      if (!this.hls && track?.mode === "showing") {
+        track.mode = "disabled";
+      }
+    };
+    this.video.textTracks.addEventListener("addtrack", addTrackHandler);
+    this.unsubscribers.push(() => {
+      this.video.textTracks.removeEventListener("addtrack", addTrackHandler);
+      for (let i = 0; i < this.video.textTracks.length; i += 1) {
+        this.video.textTracks[i]?.removeEventListener("cuechange", cueChangeHandler);
+      }
+    });
+
     const errorHandler = () => {
       void this.handleFatalPlaybackError(mediaErrorMessage(this.video.error));
     };
@@ -568,6 +620,14 @@ export class TvPlayer {
         if (subtitle) {
           this.appliedPreferredSubtitle = true;
           await this.selectSubtitle(subtitle.id, false);
+          return;
+        }
+
+        // Stream subtitle tracks are only listed after the first level loads; wait for them
+        // before falling back, or an embedded match for the saved language is never picked.
+        if (this.hls && this.hls.allSubtitleTracks.length && !this.hls.subtitleTracks.length) {
+          // Also stops hls.js from auto-selecting the DEFAULT track over our choice meanwhile.
+          this.hls.subtitleTrack = -1;
           return;
         }
       }
@@ -643,10 +703,19 @@ export class TvPlayer {
   }
 
   private updateSubtitle() {
-    const text = this.externalCues.length ? activeCue(this.externalCues, this.video.currentTime) : "";
+    const text = this.selectedSubtitleId.startsWith("hls:")
+      ? activeTextTrackCue(this.video, this.selectedHlsSubtitleLabel())
+      : this.externalCues.length
+        ? activeCue(this.externalCues, this.video.currentTime)
+        : "";
     if (this.subtitleOverlay.textContent !== text) {
       this.subtitleOverlay.textContent = text;
     }
+  }
+
+  private selectedHlsSubtitleLabel() {
+    const track = this.hls?.subtitleTracks[Number(this.selectedSubtitleId.slice("hls:".length))] as { name?: string } | undefined;
+    return track?.name;
   }
 
   private emit() {
@@ -920,6 +989,36 @@ function initialSubtitleId(session: PlaybackSession) {
   }
 
   return preferredSubtitle(externalOptions, "en")?.id ?? "off";
+}
+
+function activeTextTrackCue(video: HTMLVideoElement, label: string | undefined) {
+  for (let i = 0; i < video.textTracks.length; i += 1) {
+    const track = video.textTracks[i];
+    if (!track || track.mode !== "hidden" || (track.kind !== "subtitles" && track.kind !== "captions")) {
+      continue;
+    }
+
+    if (label !== undefined && track.label !== label) {
+      continue;
+    }
+
+    const cues = track.activeCues;
+    if (!cues?.length) {
+      return "";
+    }
+
+    const lines: string[] = [];
+    for (let j = 0; j < cues.length; j += 1) {
+      const text = cleanCueText((cues[j] as VTTCue | undefined)?.text ?? "");
+      if (text && !lines.includes(text)) {
+        lines.push(text);
+      }
+    }
+
+    return lines.join("\n");
+  }
+
+  return "";
 }
 
 function subtitleLooksForced(label: string | undefined) {

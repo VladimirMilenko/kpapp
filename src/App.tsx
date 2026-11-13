@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
-import { Navigate, RouterProvider, createMemoryRouter, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
+import { Navigate, RouterProvider, createHashRouter, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { applyAppearanceSettings, readAppearanceSettings, saveAppearanceSettings, type AppearanceSettings } from "./appearance";
 import type { PlayerRouteState, Section } from "./appTypes";
@@ -94,7 +94,9 @@ export function App({ config }: { config: KinoRuntimeConfig }) {
   const initialEntry = !api.configured ? "/config" : api.authenticated ? "/home" : "/auth";
   const router = useMemo(
     () =>
-      createMemoryRouter(
+      // Hash history: browser Back/Forward, refresh and deep links follow app screens, with no server
+      // rewrites needed on GitHub Pages.
+      createHashRouter(
         [
           { path: "/", element: <Navigate to={initialEntry} replace /> },
           { path: "/config", element: <MissingConfig /> },
@@ -108,11 +110,13 @@ export function App({ config }: { config: KinoRuntimeConfig }) {
           { path: "/detail/:id", element: <DetailRoute /> },
           { path: "/player", element: <PlayerRoute /> },
           { path: "*", element: <Navigate to={initialEntry} replace /> }
-        ],
-        { initialEntries: [initialEntry] }
+        ]
       ),
     [initialEntry]
   );
+
+  // A replaced hash router would otherwise keep reacting to browser Back/Forward.
+  useEffect(() => () => router.dispose(), [router]);
 
   useGlobalNavigation(() => {
     const path = router.state.location.pathname;
@@ -123,6 +127,11 @@ export function App({ config }: { config: KinoRuntimeConfig }) {
     }
 
     if (path === "/home") {
+      // A browser tab can't be closed by script, so the exit flow only makes sense in the packaged app.
+      if (!canCloseApp()) {
+        return;
+      }
+
       const now = Date.now();
 
       if (now - lastHomeBackAtRef.current <= EXIT_BACK_WINDOW_MS) {
@@ -154,7 +163,12 @@ export function App({ config }: { config: KinoRuntimeConfig }) {
       return;
     }
 
-    void router.navigate(-1);
+    // After a refresh or deep link there is no earlier app entry, and going back would leave the site.
+    if (hasAppHistory()) {
+      void router.navigate(-1);
+    } else {
+      void router.navigate("/home", { replace: true });
+    }
   });
 
   useEffect(() => {
@@ -232,6 +246,15 @@ function ExitConfirmDialog({
   );
 }
 
+function hasAppHistory() {
+  const state = window.history.state as { idx?: number } | null;
+  return typeof state?.idx === "number" && state.idx > 0;
+}
+
+function canCloseApp() {
+  return Boolean(window.webOS?.platformBack || window.PalmSystem);
+}
+
 function exitApp() {
   if (window.webOS?.platformBack) {
     window.webOS.platformBack();
@@ -263,6 +286,31 @@ function HomeRoute() {
 
   useEffect(() => () => window.clearTimeout(heroSelectionTimerRef.current), []);
 
+  // Stable callbacks let the memoized shelves skip re-rendering when only the hero changes.
+  const selectedHeroItemIdRef = useRef(selectedHeroItemId);
+  selectedHeroItemIdRef.current = selectedHeroItemId;
+  const openItem = useCallback(
+    (id: string | number | undefined) => {
+      if (id !== undefined) {
+        navigate(`/detail/${id}`);
+      }
+    },
+    [navigate]
+  );
+  const continueItem = useCallback(
+    (item: KinoItem) => void playResumeItem(item, api, config, queryClient, navigate),
+    [api, config, navigate, queryClient]
+  );
+  const focusItem = useCallback((item: KinoItem, context: ShelfFocusContext) => {
+    if (item.id === undefined || String(item.id) === String(selectedHeroItemIdRef.current)) {
+      return;
+    }
+
+    window.clearTimeout(heroSelectionTimerRef.current);
+    heroSelectionTimerRef.current = window.setTimeout(() => setSelectedHeroItemId(item.id), HERO_SELECTION_DELAY_MS);
+    prefetchFocusedHomeItems(item, context);
+  }, []);
+
   if (!api.authenticated) {
     return <Navigate to="/auth" replace />;
   }
@@ -282,21 +330,9 @@ function HomeRoute() {
       searchItems={undefined}
       heroItem={featuredQuery.data}
       selectedHeroItemId={selectedHeroItemId}
-      onOpen={(id) => {
-        if (id !== undefined) {
-          navigate(`/detail/${id}`);
-        }
-      }}
-      onContinue={(item) => void playResumeItem(item, api, config, queryClient, navigate)}
-      onFocusItem={(item, context) => {
-        if (item.id === undefined || String(item.id) === String(selectedHeroItemId)) {
-          return;
-        }
-
-        window.clearTimeout(heroSelectionTimerRef.current);
-        heroSelectionTimerRef.current = window.setTimeout(() => setSelectedHeroItemId(item.id), HERO_SELECTION_DELAY_MS);
-        prefetchFocusedHomeItems(item, context);
-      }}
+      onOpen={openItem}
+      onContinue={continueItem}
+      onFocusItem={focusItem}
       onOpenSearch={() => navigate("/search")}
       onOpenBrowse={() => navigate("/browse")}
       onOpenHistory={() => navigate("/history")}
@@ -913,8 +949,8 @@ async function playResumeItem(
 }
 
 async function loadHomeSections(api: KinoApi, config: KinoRuntimeConfig, queryClient: ReturnType<typeof useQueryClient>) {
-  await api.notifyDevice(config);
-  const sections = await api.homeSections();
+  // Device notify is non-blocking metadata; don't put its round trip in front of the home rails.
+  const [, sections] = await Promise.all([api.notifyDevice(config), api.homeSections()]);
   return hydrateVisibleContinueSections(sections, api, queryClient);
 }
 
@@ -923,11 +959,6 @@ async function hydrateVisibleContinueSections(
   api: KinoApi,
   queryClient: ReturnType<typeof useQueryClient>
 ) {
-  const watchlistSection = sections.find((section) => section.id === "watching");
-  if (watchlistSection) {
-    queryClient.setQueryData(kinoQueryKeys.watchlist(), watchlistSection.items);
-  }
-
   const continueIndex = sections.findIndex((section) => section.mode === "continue");
   const continueSection = sections[continueIndex];
 

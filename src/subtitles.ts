@@ -49,11 +49,7 @@ export function parseSubtitles(input: string): SubtitleCue[] {
       continue;
     }
 
-    const text = lines
-      .slice(timingLineIndex + 1)
-      .join("\n")
-      .replace(/<\/?[^>]+>/g, "")
-      .trim();
+    const text = cleanCueText(lines.slice(timingLineIndex + 1).join("\n"));
 
     if (text) {
       cues.push({ start, end, text });
@@ -64,28 +60,60 @@ export function parseSubtitles(input: string): SubtitleCue[] {
 }
 
 export function activeCue(cues: SubtitleCue[], time: number) {
-  let low = 0;
-  let high = cues.length - 1;
+  // Cues can overlap (signs, songs, multi-speaker lines), so collect every active one.
+  // Some files repeat the same line in separate cues; show it only once.
+  const lines: string[] = [];
 
-  while (low <= high) {
-    const middle = Math.floor((low + high) / 2);
-    const cue = cues[middle];
-
-    if (!cue) {
+  for (const cue of cues) {
+    if (cue.start > time) {
       break;
     }
 
-    if (time < cue.start) {
-      high = middle - 1;
-    } else if (time >= cue.end) {
-      low = middle + 1;
-    } else {
-      return cue.text;
+    if (time < cue.end && !lines.includes(cue.text)) {
+      lines.push(cue.text);
     }
   }
 
-  return "";
+  return lines.join("\n");
 }
+
+export function cleanCueText(value: string) {
+  return value
+    .replace(/\{[\\/][^}]*\}/g, "")
+    .replace(/\\[Nn]/g, "\n")
+    .replace(/\\h/g, " ")
+    .replace(/<\/?[^>]+>/g, "")
+    .replace(/&(amp|lt|gt|quot|apos|nbsp|lrm|rlm|#\d+|#x[\da-f]+);/gi, decodeEntity)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function decodeEntity(entity: string, name: string) {
+  const lower = name.toLowerCase();
+
+  if (lower.startsWith("#x")) {
+    return String.fromCodePoint(parseInt(lower.slice(2), 16));
+  }
+
+  if (lower.startsWith("#")) {
+    return String.fromCodePoint(Number(lower.slice(1)));
+  }
+
+  return ENTITIES[lower] ?? entity;
+}
+
+const ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  lrm: "",
+  rlm: ""
+};
 
 function parseTime(value: string | undefined) {
   if (!value) {

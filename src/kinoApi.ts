@@ -28,6 +28,8 @@ const TOKEN_KEY = "kino.pub.tv.tokens.v1";
 const DEVICE_ID_KEY = "kino.pub.tv.device.id.v1";
 const API_TIMEOUT_MS = 15_000;
 const HOME_RAIL_LIMIT = 24;
+// Membership checks need the full subscription list, not just the first rail page.
+const WATCHLIST_LIMIT = 500;
 
 export class AuthRequiredError extends Error {
   constructor(message = "Kino.pub session expired. Connect the TV again.") {
@@ -193,7 +195,7 @@ export class KinoApi {
     return sections.filter((section) => section.items.length);
   }
 
-  async watchlistSerials(page = 0, perpage = HOME_RAIL_LIMIT) {
+  async watchlistSerials(page = 0, perpage = WATCHLIST_LIMIT) {
     return this.listItems("/v1/watching/serials", { subscribed: 1 }, page, perpage);
   }
 

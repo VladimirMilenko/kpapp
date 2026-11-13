@@ -45,7 +45,7 @@ export function DetailScreen({
         : document.querySelector<HTMLElement>("[data-detail-play='true']");
 
       target?.focus();
-      target?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      target?.scrollIntoView({ behavior: "auto", block: "center", inline: "center" });
     });
   }, [item.id, resumeMediaId, showMediaRows]);
 
@@ -93,8 +93,10 @@ export function DetailScreen({
               <button
                 className={`secondary-action detail-watch-button${watching ? " is-active" : ""}${watchingSaving ? " is-busy" : ""}`}
                 type="button"
-                disabled={watchingDisabled}
-                data-focusable={!watchingDisabled || undefined}
+                // Saving keeps the button focusable so the remote doesn't lose focus mid-toggle.
+                disabled={watchingDisabled && !watchingSaving}
+                aria-disabled={watchingDisabled || undefined}
+                data-focusable={!watchingDisabled || watchingSaving || undefined}
                 onClick={onToggleWatching}
               >
                 {watchingSaving ? "Saving" : watchingLoading ? "Loading" : watching ? "Watching" : "Add to watching"}
